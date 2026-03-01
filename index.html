@@ -51,8 +51,72 @@
     >
       <pre
         id="debug-text"
-        class="bg-black/60 text-[#e8e8e8] font-mono text-xs leading-[1.55] px-3 py-2 rounded-md whitespace-pre min-w-[220px]"
+        class="bg-black/60 text-[#e8e8e8] font-mono text-xs leading-[1.55] px-3 py-2 rounded-md whitespace-pre min-w-55"
       ></pre>
+    </div>
+
+    <!-- ── Pause overlay ────────────────────────────────────────── -->
+    <div
+      id="pause-overlay"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
+      <!-- Main pause panel -->
+      <div id="pause-panel" class="flex flex-col items-center gap-4 w-72">
+        <h1
+          class="text-white font-bold text-3xl tracking-wide mb-2 drop-shadow"
+        >
+          Paused
+        </h1>
+
+        <button id="btn-resume" class="btn btn-primary w-full text-base">
+          Resume
+        </button>
+        <button
+          id="btn-settings"
+          class="btn btn-soft btn-secondary w-full text-base"
+        >
+          Settings
+        </button>
+        <button id="btn-quit" class="btn btn-soft btn-error w-full text-base">
+          Quit to title
+        </button>
+      </div>
+
+      <!-- Settings sub-panel (hidden by default) -->
+      <div id="settings-panel" class="hidden flex-col gap-6 w-80">
+        <div class="flex items-center gap-3 mb-1">
+          <button id="btn-back" class="btn btn-ghost btn-sm text-white/70">
+            &larr; Back
+          </button>
+          <h2 class="text-white font-bold text-2xl tracking-wide">Settings</h2>
+        </div>
+
+        <!-- Brightness -->
+        <div class="setting-row">
+          <div
+            class="flex justify-between text-white/90 text-sm font-mono mb-1.5"
+          >
+            <span>Brightness</span>
+            <span id="brightness-value">100%</span>
+          </div>
+          <input
+            id="brightness-slider"
+            type="range"
+            min="0"
+            max="200"
+            step="1"
+            value="100"
+            class="range range-primary w-full"
+          />
+          <div class="flex justify-between text-white/40 text-xs mt-0.5">
+            <span>Dark</span><span>Normal</span><span>Bright</span>
+          </div>
+        </div>
+
+        <button id="btn-settings-done" class="btn btn-primary w-full mt-2">
+          Done
+        </button>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

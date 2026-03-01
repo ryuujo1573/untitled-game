@@ -4,6 +4,7 @@ import { Physics } from "./physics";
 import { World } from "./world/world";
 import { BlockType } from "./world/block";
 import { raycast } from "./raycaster";
+import { PauseMenu } from "./pause-menu";
 
 /** Called after a block is placed or broken so the renderer can re-upload the chunk. */
 export type BlockEditCallback = (wx: number, wy: number, wz: number) => void;
@@ -55,6 +56,7 @@ export class InputManager {
   private world: World;
   private onBlockEdit: BlockEditCallback;
   private pointerLocked = false;
+  private pauseMenu!: PauseMenu;
   private placeTypeIndex = 0;
   get placeBlockType(): BlockType {
     return PLACE_CYCLE[this.placeTypeIndex];
@@ -76,17 +78,26 @@ export class InputManager {
     physics: Physics,
     world: World,
     onBlockEdit: BlockEditCallback,
+    pauseMenu: PauseMenu,
   ) {
     this.camera = camera;
     this.physics = physics;
     this.world = world;
     this.onBlockEdit = onBlockEdit;
+    this.pauseMenu = pauseMenu;
     // Initialise hotbar display.
     updateHotbar(this.placeBlockType);
 
     window.addEventListener("keydown", (e) => {
       this.keys.add(e.code);
       if (e.code === "Space") e.preventDefault();
+      // ESC: if pointer is locked the browser fires pointerlockchange first;
+      // that handler calls pauseMenu.pause(). If already unlocked, toggle.
+      if (e.code === "Escape") {
+        e.preventDefault();
+        if (!this.pointerLocked) this.pauseMenu.toggle();
+        return;
+      }
       // Cycle held block type with E.
       if (e.code === "KeyE" && this.pointerLocked) {
         this.placeTypeIndex = (this.placeTypeIndex + 1) % PLACE_CYCLE.length;
@@ -135,9 +146,9 @@ export class InputManager {
       this.pointerLocked = document.pointerLockElement === canvas;
 
       if (!this.pointerLocked) {
-        // Lost lock (alt+tab, Escape, etc.) – clear key state so no
-        // movement action stays active while the window is unfocused.
         this.keys.clear();
+        // ESC from gameplay: show pause screen.
+        if (wasLocked && !this.pauseMenu.paused) this.pauseMenu.pause();
       } else if (!wasLocked) {
         // Just re-acquired lock – schedule skip of the next few mouse
         // events to drain any queued delta burst from the OS.
@@ -157,6 +168,8 @@ export class InputManager {
 
   /** Call once per frame – feeds wish direction and jump into Physics. */
   update(): void {
+    if (this.pauseMenu.paused) return;
+
     const fwd = this.camera.getFlatForward();
     const right = this.camera.getRight();
 

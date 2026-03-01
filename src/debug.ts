@@ -9,6 +9,8 @@ export interface RenderStats {
   totalChunks: number;
   drawnVertices: number;
   totalVertices: number;
+  /** Normalised time-of-day in [0, 1). 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset. */
+  worldTime: number;
 }
 
 // ── Cardinal direction table ────────────────────────────────────
@@ -162,7 +164,22 @@ export class DebugOverlay {
     const pitch = camera.pitch;
     const cardinal = toCardinal(yaw);
 
-    // ── Raycast for target block info ──────────────────────────
+    // ── Time-of-day label ─────────────────────────────────────
+    const t = stats.worldTime; // 0..1
+    const totalMinutes = Math.floor(t * 24 * 60);
+    const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+    const mm = String(totalMinutes % 60).padStart(2, "0");
+    const phase =
+      t < 0.2
+        ? "Night"
+        : t < 0.27
+          ? "Dawn"
+          : t < 0.73
+            ? "Day"
+            : t < 0.8
+              ? "Dusk"
+              : "Night";
+
     const fwd = camera.getForward();
     const hit = raycast(camera.position, fwd, world);
 
@@ -188,6 +205,7 @@ export class DebugOverlay {
       `FPS    ${Time.GetFPS().toFixed(0)}\n` +
       `Chunks ${stats.drawCalls} / ${stats.totalChunks}  (${stats.totalChunks - stats.drawCalls} culled)\n` +
       `Verts  ${(stats.drawnVertices / 1000).toFixed(1)}k / ${(stats.totalVertices / 1000).toFixed(1)}k\n` +
+      `Time   ${hh}:${mm}  ${phase}\n` +
       `\n` +
       `<span class="dbg-section">Position</span>\n` +
       `XYZ   ${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}\n` +

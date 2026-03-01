@@ -11,6 +11,8 @@ import { DebugOverlay } from "./debug";
 import { Frustum } from "./frustum";
 import { createAtlasTexture } from "./atlas";
 import { raycast, RayHit } from "./raycaster";
+import { Settings } from "./settings";
+import { PauseMenu } from "./pause-menu";
 
 /**
  * Uploads a chunk's mesh to GPU buffers so it can be drawn each frame.
@@ -94,7 +96,6 @@ function createWireCube(gl: WebGLRenderingContext): {
 async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
   // ── Render state ────────────────────────────────────────
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-  gl.clearColor(0.53, 0.81, 0.92, 1.0); // sky blue
   gl.enable(gl.CULL_FACE);
   gl.cullFace(gl.BACK);
   gl.frontFace(gl.CCW);
@@ -119,6 +120,10 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
   const uView = gl.getUniformLocation(program, "u_viewMatrix");
   const uProj = gl.getUniformLocation(program, "u_projectionMatrix");
   const uAtlas = gl.getUniformLocation(program, "u_atlas");
+  const uAmbient = gl.getUniformLocation(program, "u_ambientLight");
+  const uFogColor = gl.getUniformLocation(program, "u_fogColor");
+  const uFogNear = gl.getUniformLocation(program, "u_fogNear");
+  const uFogFar = gl.getUniformLocation(program, "u_fogFar");
 
   // Load and upload the atlas texture (async: waits for PNG ore images).
   const atlasTexture = await createAtlasTexture(gl);
@@ -133,8 +138,14 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
   world.generate(4); // 4×4 chunks = 64×64 blocks
 
   const physics = new Physics(camera, world);
-  const input = new InputManager(canvas, camera, physics, world, (wx, wy, wz) =>
-    rebuildChunk(gl, world, wx, wy, wz),
+  const pauseMenu = new PauseMenu(() => canvas.requestPointerLock());
+  const input = new InputManager(
+    canvas,
+    camera,
+    physics,
+    world,
+    (wx, wy, wz) => rebuildChunk(gl, world, wx, wy, wz),
+    pauseMenu,
   );
   const debug = new DebugOverlay(gl);
 
@@ -188,8 +199,41 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
     Time.CalculateTimeVariables();
     input.update();
 
+    // ── Day-night lighting ───────────────────────────────────────
+    //   worldTime: 0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
+    const wt = Time.worldTime;
+    const sunAngle = (wt - 0.25) * Math.PI * 2; // 0 at sunrise, π/2 at noon
+    const sunHeight = Math.sin(sunAngle); // -1 = midnight, +1 = noon
+
+    // How much direct sunlight: 0 at/below horizon, 1 at noon.
+    const dayFactor = Math.max(0.0, sunHeight);
+
+    // Twilight glow: Gaussian peak exactly at the horizon (sunHeight=0).
+    // Naturally activates at BOTH dawn and dusk; ~zero deep in the night.
+    // Cutoff at sunHeight < -0.3 avoids a ghost glow in the middle of the night.
+    const twilight =
+      sunHeight > -0.3 ? Math.exp(-sunHeight * sunHeight * 30.0) : 0.0;
+
+    // Colour palette (night → twilight → day)
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+    // Sky:     deep navy         warm orange/pink      clear blue
+    const skyR = lerp(lerp(0.01, 0.88, twilight), 0.53, dayFactor);
+    const skyG = lerp(lerp(0.01, 0.45, twilight), 0.81, dayFactor);
+    const skyB = lerp(lerp(0.1, 0.22, twilight), 0.92, dayFactor);
+    // Ambient: near-black        warm golden           bright warm white
+    const ambR = lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor);
+    const ambG = lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor);
+    const ambB = lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor);
+
+    gl.clearColor(skyR, skyG, skyB, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(program);
+    const b = Settings.brightness;
+    gl.uniform3f(uAmbient, ambR * b, ambG * b, ambB * b);
+    gl.uniform3f(uFogColor, skyR, skyG, skyB);
+    gl.uniform1f(uFogNear, 40.0);
+    gl.uniform1f(uFogFar, 80.0);
+    // ────────────────────────────────────────────────────────────────
 
     // Camera matrices
     const aspect = canvas.width / canvas.height;
@@ -304,6 +348,7 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
       totalChunks: world.chunks.size,
       drawnVertices: drawnVerts,
       totalVertices: totalVerts,
+      worldTime: Time.worldTime,
     });
   }
 

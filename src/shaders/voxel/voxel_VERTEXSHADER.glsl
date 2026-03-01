@@ -8,6 +8,7 @@ attribute vec4 a_uvl;
 // fract() is intentionally applied THERE (after interpolation) so that
 // integer corner values don't collapse every face to UV (0,0).
 varying vec4 v_uvl;
+varying float v_fogDist;  // eye-space distance for fog
 
 uniform mat4 u_modelMatrix;
 uniform mat4 u_viewMatrix;
@@ -15,5 +16,7 @@ uniform mat4 u_projectionMatrix;
 
 void main() {
     v_uvl = a_uvl;
-    gl_Position = u_projectionMatrix * u_viewMatrix * u_modelMatrix * vec4(a_position, 1.0);
+    vec4 eyePos = u_viewMatrix * u_modelMatrix * vec4(a_position, 1.0);
+    v_fogDist = -eyePos.z;          // positive depth in front of camera
+    gl_Position = u_projectionMatrix * eyePos;
 }
