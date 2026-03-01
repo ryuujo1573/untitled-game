@@ -1,6 +1,17 @@
 import { Chunk, CHUNK_SIZE } from "./chunk";
 import { BlockType } from "./block";
 
+/** Deterministic 3-D hash for ore placement, returns [0, 1). */
+function oreRng(wx: number, y: number, wz: number): number {
+  let h = (wx * 16807 + y * 48271 + wz * 39119) | 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  h ^= h >>> 12;
+  h = Math.imul(h, 0x297a2d39);
+  h ^= h >>> 15;
+  return (h >>> 0) / 0x100000000;
+}
+
 /**
  * Manages a flat grid of chunks keyed by "cx,cz".
  * For now generates a small fixed-size terrain.
@@ -79,7 +90,19 @@ export class World {
               } else if (y >= h - 2) {
                 chunk.setBlock(lx, y, lz, BlockType.Dirt);
               } else {
-                chunk.setBlock(lx, y, lz, BlockType.Stone);
+                // Ore placement: deterministic hash selects block type.
+                // Cumulative thresholds → approximate vein densities.
+                const r = oreRng(wx, y, wz);
+                let bt = BlockType.Stone;
+                if (r < 0.005) bt = BlockType.DiamondOre;
+                else if (r < 0.013) bt = BlockType.EmeraldOre;
+                else if (r < 0.028) bt = BlockType.GoldOre;
+                else if (r < 0.043) bt = BlockType.LapisOre;
+                else if (r < 0.063) bt = BlockType.RedstoneOre;
+                else if (r < 0.093) bt = BlockType.CopperOre;
+                else if (r < 0.143) bt = BlockType.IronOre;
+                else if (r < 0.223) bt = BlockType.CoalOre;
+                chunk.setBlock(lx, y, lz, bt);
               }
             }
           }

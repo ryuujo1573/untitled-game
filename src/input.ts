@@ -13,12 +13,28 @@ const PLACE_CYCLE: BlockType[] = [
   BlockType.Dirt,
   BlockType.Grass,
   BlockType.Stone,
+  BlockType.CoalOre,
+  BlockType.IronOre,
+  BlockType.GoldOre,
+  BlockType.DiamondOre,
+  BlockType.EmeraldOre,
+  BlockType.LapisOre,
+  BlockType.RedstoneOre,
+  BlockType.CopperOre,
 ];
 const PLACE_NAMES: Record<BlockType, string> = {
   [BlockType.Air]: "Air",
   [BlockType.Grass]: "Grass",
   [BlockType.Dirt]: "Dirt",
   [BlockType.Stone]: "Stone",
+  [BlockType.CoalOre]: "Coal Ore",
+  [BlockType.IronOre]: "Iron Ore",
+  [BlockType.GoldOre]: "Gold Ore",
+  [BlockType.DiamondOre]: "Diamond Ore",
+  [BlockType.EmeraldOre]: "Emerald Ore",
+  [BlockType.LapisOre]: "Lapis Ore",
+  [BlockType.RedstoneOre]: "Redstone Ore",
+  [BlockType.CopperOre]: "Copper Ore",
 };
 
 function updateHotbar(type: BlockType): void {

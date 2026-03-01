@@ -10,7 +10,11 @@ function main() {
     return;
   }
 
-  EngineRenderer(gl);
+  EngineRenderer(gl).catch((err) => {
+    console.error("Failed to start renderer:", err);
+    document.body.textContent =
+      "⚠️ Failed to load textures. Check the console.";
+  });
 }
 
 main();

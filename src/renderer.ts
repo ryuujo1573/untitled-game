@@ -91,7 +91,7 @@ function createWireCube(gl: WebGLRenderingContext): {
   return { buf, count: v.length / 3 }; // 24
 }
 
-function EngineRenderer(gl: WebGLRenderingContext) {
+async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
   // ── Render state ────────────────────────────────────────
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.53, 0.81, 0.92, 1.0); // sky blue
@@ -120,8 +120,8 @@ function EngineRenderer(gl: WebGLRenderingContext) {
   const uProj = gl.getUniformLocation(program, "u_projectionMatrix");
   const uAtlas = gl.getUniformLocation(program, "u_atlas");
 
-  // Create the atlas texture and bind it permanently to TEXTURE0.
-  const atlasTexture = createAtlasTexture(gl);
+  // Load and upload the atlas texture (async: waits for PNG ore images).
+  const atlasTexture = await createAtlasTexture(gl);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
   gl.uniform1i(uAtlas, 0);
