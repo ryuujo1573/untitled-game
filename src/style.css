@@ -1,107 +1,42 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@import "tailwindcss";
+@plugin "flyonui";
+
+/* ── Base reset ─────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html,
+  body {
+    @apply w-full h-full overflow-hidden bg-black;
+  }
 }
 
-html,
-body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #000;
-}
-
+/* ── WebGL canvas ───────────────────────────────────────────── */
 #webglCanvas {
-  display: block;
-  width: 100vw;
-  height: 100vh;
+  @apply block w-screen h-screen;
 }
 
+/* ── Crosshair: text-shadow can't be expressed as a utility ─── */
 #crosshair {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 24px;
-  font-family: monospace;
-  pointer-events: none;
+  @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+         text-white font-mono text-2xl pointer-events-none select-none z-10;
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
-  user-select: none;
-  z-index: 10;
-}
-#hotbar {
-  position: fixed;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.55);
-  color: white;
-  font-family: monospace;
-  font-size: 15px;
-  padding: 6px 16px;
-  border-radius: 6px;
-  pointer-events: none;
-  user-select: none;
-  z-index: 10;
 }
 
-#help {
-  position: fixed;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: rgba(255, 255, 255, 0.55);
-  font-family: monospace;
-  font-size: 12px;
-  pointer-events: none;
-  user-select: none;
-  z-index: 10;
-}
-
-/* ── F3 debug overlay ───────────────────────────────────────── */
-#debug-panel {
-  position: fixed;
-  top: 8px;
-  left: 8px;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 10px;
-  pointer-events: none;
-  user-select: none;
-  z-index: 20;
-}
-
-#debug-text {
-  background: rgba(0, 0, 0, 0.6);
-  color: #e8e8e8;
-  font-family: monospace;
-  font-size: 12px;
-  line-height: 1.55;
-  padding: 8px 12px;
-  border-radius: 6px;
-  white-space: pre;
-  min-width: 220px;
-}
-
-#debug-text .dbg-section {
-  color: #ffd86e;
-  font-weight: bold;
-}
-
+/* ── 3-D compass canvas (JS controls show/hide) ─────────────── */
 #debug-compass {
-  display: block;
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  @apply block fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+         rounded-full pointer-events-none select-none z-10;
   width: 96px;
   height: 96px;
-  background: transparent;
-  border-radius: 50%;
-  pointer-events: none;
-  user-select: none;
-  z-index: 10;
+}
+
+/* ── Section headers inside pre-formatted debug text ────────── */
+#debug-text .dbg-section {
+  @apply font-bold text-yellow-300;
 }

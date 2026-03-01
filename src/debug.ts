@@ -2,6 +2,12 @@ import { Camera } from "./camera";
 import { World } from "./world/world";
 import { BlockType } from "./world/block";
 import { raycast } from "./raycaster";
+import Time from "./time-manager";
+
+export interface RenderStats {
+  drawCalls: number;
+  totalChunks: number;
+}
 
 // ── Cardinal direction table ────────────────────────────────────
 // yaw=0 → looking -Z = North, yaw=π/2 → looking +X = East
@@ -17,6 +23,21 @@ function faceLabel(nx: number, ny: number, nz: number): string {
   if (nx !== 0) return nx > 0 ? "+X (East)" : "-X (West)";
   if (ny !== 0) return ny > 0 ? "+Y (Top)" : "-Y (Bottom)";
   return nz > 0 ? "+Z (South)" : "-Z (North)";
+}
+
+/** Extracts a human-readable browser name + version from the user-agent string. */
+function getBrowserInfo(ua: string): string {
+  if (/Edg\//.test(ua))
+    return `Edge ${ua.match(/Edg\/([\d.]+)/)?.[1] ?? ""}`.trim();
+  if (/OPR\//.test(ua))
+    return `Opera ${ua.match(/OPR\/([\d.]+)/)?.[1] ?? ""}`.trim();
+  if (/Chrome\//.test(ua))
+    return `Chrome ${ua.match(/Chrome\/([\d.]+)/)?.[1] ?? ""}`.trim();
+  if (/Firefox\//.test(ua))
+    return `Firefox ${ua.match(/Firefox\/([\d.]+)/)?.[1] ?? ""}`.trim();
+  if (/Safari\//.test(ua))
+    return `Safari ${ua.match(/Version\/([\d.]+)/)?.[1] ?? ""}`.trim();
+  return "Unknown";
 }
 
 // ── Axis definitions for the 3-D compass ───────────────────────
@@ -73,9 +94,10 @@ export class DebugOverlay {
   private readonly compass: HTMLCanvasElement;
   private readonly crosshair: HTMLElement;
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly sysInfo: string;
   private visible = false;
 
-  constructor() {
+  constructor(gl: WebGLRenderingContext) {
     this.panel = document.getElementById("debug-panel")!;
     this.textEl = document.getElementById("debug-text")!;
     this.compass = document.getElementById(
@@ -83,6 +105,41 @@ export class DebugOverlay {
     ) as HTMLCanvasElement;
     this.crosshair = document.getElementById("crosshair")!;
     this.ctx = this.compass.getContext("2d")!;
+
+    // ── One-time system / environment snapshot ──────────────────
+    const dbgExt = gl.getExtension("WEBGL_debug_renderer_info");
+    const gpuRenderer = dbgExt
+      ? (gl.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL) as string)
+      : "—";
+    const gpuVendor = dbgExt
+      ? (gl.getParameter(dbgExt.UNMASKED_VENDOR_WEBGL) as string)
+      : "—";
+    const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+    const maxViewport = (
+      gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array
+    ).join("×");
+
+    const cpuCores = navigator.hardwareConcurrency ?? "—";
+    const ramGB =
+      (navigator as unknown as { deviceMemory?: number }).deviceMemory != null
+        ? `~${(navigator as unknown as { deviceMemory: number }).deviceMemory} GB`
+        : "—";
+
+    const browser = getBrowserInfo(navigator.userAgent);
+    const platform = navigator.platform || "—";
+    const screenRes = `${screen.width}×${screen.height}`;
+    const dpr = window.devicePixelRatio.toFixed(2);
+    const colorDepth = `${screen.colorDepth}-bit`;
+
+    this.sysInfo =
+      `GPU     ${gpuRenderer}\n` +
+      `Vendor  ${gpuVendor}\n` +
+      `MaxTex  ${maxTex}px  VP ${maxViewport}\n` +
+      `CPU     ${cpuCores} logical cores\n` +
+      `RAM     ${ramGB}\n` +
+      `Browser ${browser}\n` +
+      `Screen  ${screenRes}  DPR ×${dpr}  ${colorDepth}\n` +
+      `OS      ${platform}`;
 
     window.addEventListener("keydown", (e) => {
       if (e.code === "F3") {
@@ -95,7 +152,7 @@ export class DebugOverlay {
     });
   }
 
-  update(camera: Camera, world: World): void {
+  update(camera: Camera, world: World, stats: RenderStats): void {
     if (!this.visible) return;
 
     const [px, py, pz] = camera.position;
@@ -125,6 +182,10 @@ export class DebugOverlay {
 
     // ── Update DOM text ────────────────────────────────────────
     this.textEl.innerHTML =
+      `<span class="dbg-section">Renderer</span>\n` +
+      `FPS    ${Time.GetFPS().toFixed(0)}\n` +
+      `Chunks ${stats.drawCalls} / ${stats.totalChunks}  (${stats.totalChunks - stats.drawCalls} culled)\n` +
+      `\n` +
       `<span class="dbg-section">Position</span>\n` +
       `XYZ   ${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}\n` +
       `Block  ${Math.floor(px)}, ${Math.floor(py)}, ${Math.floor(pz)}\n` +
@@ -133,7 +194,10 @@ export class DebugOverlay {
       `${cardinal}   yaw ${((yaw * 180) / Math.PI).toFixed(1)}°   pitch ${((pitch * 180) / Math.PI).toFixed(1)}°\n` +
       `\n` +
       `<span class="dbg-section">Target block</span>\n` +
-      targetLines;
+      targetLines +
+      `\n\n` +
+      `<span class="dbg-section">System</span>\n` +
+      this.sysInfo;
 
     // ── Draw 3-D compass ───────────────────────────────────────
     this.drawCompass(yaw, pitch);

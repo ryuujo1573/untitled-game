@@ -8,6 +8,7 @@ import { Physics } from "./physics";
 import { World } from "./world/world";
 import { Chunk, CHUNK_SIZE } from "./world/chunk";
 import { DebugOverlay } from "./debug";
+import { Frustum } from "./frustum";
 
 /**
  * Procedurally generates a 64×16 pixel texture atlas using Canvas 2D.
@@ -166,7 +167,7 @@ function EngineRenderer(gl: WebGLRenderingContext) {
   const input = new InputManager(canvas, camera, physics, world, (wx, wy, wz) =>
     rebuildChunk(gl, world, wx, wy, wz),
   );
-  const debug = new DebugOverlay();
+  const debug = new DebugOverlay(gl);
 
   // Upload all chunk meshes
   world.chunks.forEach((chunk) => uploadChunk(gl, chunk));
@@ -182,37 +183,58 @@ function EngineRenderer(gl: WebGLRenderingContext) {
 
   // ── Render loop ─────────────────────────────────────────
   const modelMatrix = mat4.create();
+  const vpMatrix = mat4.create();
+  const frustum = new Frustum();
 
   function frame() {
     requestAnimationFrame(frame);
     Time.CalculateTimeVariables();
     input.update();
-    debug.update(camera, world);
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(program);
 
     // Camera matrices
     const aspect = canvas.width / canvas.height;
-    gl.uniformMatrix4fv(uView, false, camera.getViewMatrix());
-    gl.uniformMatrix4fv(uProj, false, camera.getProjectionMatrix(aspect));
+    const viewMatrix = camera.getViewMatrix();
+    const projMatrix = camera.getProjectionMatrix(aspect);
+    gl.uniformMatrix4fv(uView, false, viewMatrix);
+    gl.uniformMatrix4fv(uProj, false, projMatrix);
+
+    // Update frustum for this frame’s view-projection.
+    mat4.multiply(vpMatrix, projMatrix, viewMatrix);
+    frustum.update(vpMatrix);
 
     // Ensure the atlas is still bound (safe to call every frame).
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
 
-    // Draw each chunk
+    // Draw each chunk (frustum culled)
+    let drawCalls = 0;
     world.chunks.forEach((chunk) => {
       if (chunk.vertexCount === 0 || !chunk.posBuffer || !chunk.uvBuffer)
         return;
 
+      // Frustum cull: skip chunks whose AABB is entirely outside the frustum.
+      const wx0 = chunk.cx * CHUNK_SIZE;
+      const wz0 = chunk.cz * CHUNK_SIZE;
+      if (
+        !frustum.containsAABB(
+          wx0,
+          0,
+          wz0,
+          wx0 + CHUNK_SIZE,
+          CHUNK_SIZE,
+          wz0 + CHUNK_SIZE,
+        )
+      )
+        return;
+
+      drawCalls++;
+
       // Model matrix = translate to chunk world position
       mat4.identity(modelMatrix);
-      mat4.translate(modelMatrix, modelMatrix, [
-        chunk.cx * CHUNK_SIZE,
-        0,
-        chunk.cz * CHUNK_SIZE,
-      ]);
+      mat4.translate(modelMatrix, modelMatrix, [wx0, 0, wz0]);
       gl.uniformMatrix4fv(uModel, false, modelMatrix);
 
       // Bind position attribute
@@ -227,6 +249,8 @@ function EngineRenderer(gl: WebGLRenderingContext) {
 
       gl.drawArrays(gl.TRIANGLES, 0, chunk.vertexCount);
     });
+
+    debug.update(camera, world, { drawCalls, totalChunks: world.chunks.size });
   }
 
   frame();

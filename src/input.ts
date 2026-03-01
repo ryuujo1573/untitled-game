@@ -23,7 +23,8 @@ const PLACE_NAMES: Record<BlockType, string> = {
 
 function updateHotbar(type: BlockType): void {
   const el = document.getElementById("hotbar");
-  if (el) el.textContent = `Block: ${PLACE_NAMES[type]}  [E] to cycle`;
+  if (el)
+    el.innerHTML = `Block: <strong>${PLACE_NAMES[type]}</strong>&nbsp;&nbsp;<kbd class="kbd kbd-sm">E</kbd>&nbsp;to cycle`;
 }
 
 /**

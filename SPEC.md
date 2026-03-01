@@ -489,11 +489,191 @@ A white centre dot anchors the origin.
 
 ---
 
+## Step 13 – Frustum Culling (`src/frustum.ts`)
+
+### Why frustum culling?
+
+Even with only 16 chunks the GPU processes every one per frame. Once the world
+becomes large (infinite terrain), skipping invisible chunks becomes critical.
+Frustum culling is a pure-CPU test, so it eliminates `gl.drawArrays` calls
+before they ever reach the GPU driver.
+
+### Gribb / Hartmann plane extraction
+
+Given the combined VP matrix (column-major as gl-matrix produces), 6 clip-space
+planes can be read directly from pairs of matrix rows:
+
+```
+gl-matrix column-major layout:
+  row 0 = [m[0], m[4], m[8],  m[12]]
+  row 1 = [m[1], m[5], m[9],  m[13]]
+  row 2 = [m[2], m[6], m[10], m[14]]
+  row 3 = [m[3], m[7], m[11], m[15]]
+
+Left   = row3 + row0
+Right  = row3 − row0
+Bottom = row3 + row1
+Top    = row3 − row1
+Near   = row3 + row2
+Far    = row3 − row2
+```
+
+Each plane is stored as `(A, B, C, D)`. A world-space point `p` (with `w=1`) is
+_inside_ when `A·px + B·py + C·pz + D ≥ 0`.
+
+### AABB test – p-vertex optimisation
+
+For each of the 6 planes, pick the AABB corner that is furthest _in the direction
+of the plane normal_ (the **p-vertex**):
+
+```
+px = A ≥ 0 ? maxX : minX
+py = B ≥ 0 ? maxY : minY
+pz = C ≥ 0 ? maxZ : minZ
+
+if  A·px + B·py + C·pz + D < 0  →  AABB is entirely outside → cull
+```
+
+If the p-vertex (the most optimistic corner) still fails, every corner is outside
+— so we can skip the whole chunk. The test is conservative: it never culls a
+visible chunk, but may occasionally pass one just outside a frustum edge.
+
+### Integration in renderer
+
+Each frame:
+
+```
+1. viewMatrix  = camera.getViewMatrix()
+2. projMatrix  = camera.getProjectionMatrix(aspect)
+3. vpMatrix    = projMatrix × viewMatrix   (mat4.multiply)
+4. frustum.update(vpMatrix)
+5. for each chunk:
+     if !frustum.containsAABB(wx0,0,wz0, wx0+16,16,wz0+16) → skip
+     else → draw + drawCalls++
+```
+
+### F3 overlay
+
+The debug panel now shows three extra lines at the top:
+
+```
+Renderer
+FPS    60
+Chunks 9 / 16  (7 culled)
+```
+
+---
+
+## Step 14 — Tailwind CSS v4 + FlyonUI + Browser System Info
+
+### Goals
+
+1. Replace hand-rolled CSS with **Tailwind CSS v4** (CSS-first, no config file).
+2. Add **FlyonUI** for styled keyboard-key (`kbd`) components in the HUD.
+3. Enrich the **F3 debug panel** with one-time browser environment stats.
+
+### Tailwind v4 setup
+
+Tailwind v4 uses a _CSS-first_ configuration approach — no `tailwind.config.js`.
+
+**`vite.config.ts`** (new file):
+
+```ts
+import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({ plugins: [tailwindcss()] });
+```
+
+**`src/style.css`** — starts with:
+
+```css
+@import "tailwindcss";
+@plugin "flyonui";
+```
+
+Tailwind's Vite plugin handles JIT scanning of all `.ts`/`.html` source files
+automatically; no `content` array is needed.
+
+### CSS decomposition
+
+| Element                                           | Approach                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `html, body`                                      | `@layer base` with `@apply w-full h-full overflow-hidden bg-black`      |
+| `#webglCanvas`                                    | `@apply block w-screen h-screen`                                        |
+| `#crosshair`                                      | `@apply` for position/font + bare `text-shadow` (no utility equivalent) |
+| `#debug-compass`                                  | `@apply` for position + explicit `width/height: 96px`                   |
+| `#hotbar`, `#help`, `#debug-panel`, `#debug-text` | Tailwind utility classes on the HTML elements directly                  |
+| `.dbg-section`                                    | `@apply font-bold text-yellow-300` (nested selector, stays in CSS)      |
+
+### FlyonUI `kbd` component
+
+Key hints in the HUD use the `kbd` / `kbd-sm` / `kbd-xs` component classes
+provided by FlyonUI (DaisyUI v5 compatible):
+
+```html
+<kbd class="kbd kbd-xs">W</kbd> <kbd class="kbd kbd-sm">E</kbd>
+```
+
+`InputManager.updateHotbar()` uses `innerHTML` to inject `<kbd>` markup when
+the held block type changes.
+
+### Browser environment info — APIs used
+
+| Info                | API                                                                        |
+| ------------------- | -------------------------------------------------------------------------- |
+| GPU renderer        | `gl.getExtension("WEBGL_debug_renderer_info")` → `UNMASKED_RENDERER_WEBGL` |
+| GPU vendor          | same extension → `UNMASKED_VENDOR_WEBGL`                                   |
+| Max texture size    | `gl.getParameter(gl.MAX_TEXTURE_SIZE)`                                     |
+| Max viewport dims   | `gl.getParameter(gl.MAX_VIEWPORT_DIMS)`                                    |
+| CPU logical cores   | `navigator.hardwareConcurrency`                                            |
+| Device RAM (approx) | `navigator.deviceMemory` (Chrome, returns GB bucket)                       |
+| Browser + version   | `navigator.userAgent` regex extraction                                     |
+| OS / platform       | `navigator.platform`                                                       |
+| Screen resolution   | `screen.width × screen.height`                                             |
+| Display pixel ratio | `window.devicePixelRatio`                                                  |
+| Colour depth        | `screen.colorDepth`                                                        |
+
+All values are captured once in `DebugOverlay` constructor (passed `gl`) and
+stored in `this.sysInfo`. They are appended as a static **System** section at
+the bottom of the F3 text pane every frame.
+
+### F3 panel (full layout)
+
+```
+Renderer
+FPS    144
+Chunks 9 / 16  (7 culled)
+
+Position
+XYZ   32.00, 20.00, 32.00
+Block  32, 20, 32
+
+Facing
+N   yaw 0.0°   pitch -17.2°
+
+Target block
+Dirt  (32, 18, 31)
+chunk (2, 1)  local (0, 18, 15)
+face  -Z (North)
+
+System
+GPU     ANGLE (NVIDIA GeForce RTX 4060 Direct3D11 vs_5_0 ps_5_0)
+Vendor  Google Inc. (NVIDIA)
+MaxTex  16384px  VP 32767×32767
+CPU     16 logical cores
+RAM     ~16 GB
+Browser Chrome 136.0.7103.114
+Screen  2560×1440  DPR ×1.50  24-bit
+OS      Win32
+```
+
+---
+
 ## Future Steps (not implemented now)
 
-| Feature           | Notes                                                                  |
-| ----------------- | ---------------------------------------------------------------------- |
-| Greedy meshing    | Merge coplanar same-type faces to cut vertex count ~70 %.              |
-| Frustum culling   | Skip `drawArrays` for chunks whose AABB is outside the camera frustum. |
-| Infinite terrain  | Stream chunks in/out as the player moves (Simplex noise heightmap).    |
-| Ambient occlusion | Darken vertices tucked into corners based on solid-neighbor count.     |
+| Feature           | Notes                                                               |
+| ----------------- | ------------------------------------------------------------------- |
+| Greedy meshing    | Merge coplanar same-type faces to cut vertex count ~70 %.           |
+| Infinite terrain  | Stream chunks in/out as the player moves (Simplex noise heightmap). |
+| Ambient occlusion | Darken vertices tucked into corners based on solid-neighbor count.  |

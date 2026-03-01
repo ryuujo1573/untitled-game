@@ -5,31 +5,56 @@
     <link rel="icon" type="image/png" href="WebGL-Logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Voxxer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
     <canvas id="webglCanvas"></canvas>
+
+    <!-- Crosshair (text-shadow applied via CSS rule) -->
     <div id="crosshair">+</div>
+
+    <!-- 3-D compass: shown in F3 mode, replaces crosshair -->
     <canvas
       id="debug-compass"
       width="96"
       height="96"
       style="display: none"
     ></canvas>
-    <div id="hotbar">Block: Dirt [E] to cycle</div>
-    <div id="help">
-      WASD move · Space jump · LMB break · RMB place · E cycle block · F3 debug
+
+    <!-- Hotbar: current held block (updated by InputManager) -->
+    <div
+      id="hotbar"
+      class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-black/55 text-white font-mono text-[15px] px-4 py-1.5 rounded-md pointer-events-none select-none z-10"
+    >
+      Block: Dirt&nbsp;&nbsp;<kbd class="kbd kbd-sm">E</kbd>&nbsp;to cycle
     </div>
-    <!-- F3 debug overlay (hidden until F3 is pressed) -->
-    <div id="debug-panel" style="display: none">
-      <pre id="debug-text"></pre>
+
+    <!-- Control hints -->
+    <div
+      id="help"
+      class="fixed bottom-2.5 left-1/2 -translate-x-1/2 text-white/55 font-mono text-xs pointer-events-none select-none z-10 flex items-center gap-1"
+    >
+      <kbd class="kbd kbd-xs">W</kbd><kbd class="kbd kbd-xs">A</kbd
+      ><kbd class="kbd kbd-xs">S</kbd><kbd class="kbd kbd-xs">D</kbd>
+      move &nbsp;·&nbsp;
+      <kbd class="kbd kbd-xs">Space</kbd> jump &nbsp;·&nbsp; LMB break
+      &nbsp;·&nbsp; RMB place &nbsp;·&nbsp;
+      <kbd class="kbd kbd-xs">E</kbd> cycle block &nbsp;·&nbsp;
+      <kbd class="kbd kbd-xs">F3</kbd> debug
     </div>
+
+    <!-- F3 debug overlay (hidden until F3 pressed) -->
+    <div
+      id="debug-panel"
+      class="fixed top-2 left-2 flex flex-row items-start gap-2.5 pointer-events-none select-none z-20"
+      style="display: none"
+    >
+      <pre
+        id="debug-text"
+        class="bg-black/60 text-[#e8e8e8] font-mono text-xs leading-[1.55] px-3 py-2 rounded-md whitespace-pre min-w-[220px]"
+      ></pre>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
