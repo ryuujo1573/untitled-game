@@ -4,6 +4,7 @@ import ShaderUtilites from "./renderer-utils";
 import Materials from "./shader-materials";
 import { Camera } from "./camera";
 import { InputManager } from "./input";
+import { Physics } from "./physics";
 import { World } from "./world/world";
 import { Chunk, CHUNK_SIZE } from "./world/chunk";
 
@@ -58,11 +59,11 @@ function EngineRenderer(gl: WebGLRenderingContext) {
   // ── Camera & input ──────────────────────────────────────
   const canvas = gl.canvas as HTMLCanvasElement;
   const camera = new Camera();
-  const input = new InputManager(canvas, camera);
-
-  // ── World ───────────────────────────────────────────────
   const world = new World();
   world.generate(4); // 4×4 chunks = 64×64 blocks
+
+  const physics = new Physics(camera, world);
+  const input = new InputManager(canvas, camera, physics);
 
   // Upload all chunk meshes
   world.chunks.forEach((chunk) => uploadChunk(gl, chunk));

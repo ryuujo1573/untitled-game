@@ -214,14 +214,52 @@ EngineRenderer(gl):
 
 ---
 
+## Step 9 – Collision & Gravity (`src/physics.ts`)
+
+### Player AABB
+
+The player is modelled as a box: **0.6 × 1.8 × 0.6** units (half-width 0.3 each side).
+The camera sits at **eye height = 1.6** above the feet position.
+
+### Algorithm – per-axis sweep
+
+Each frame, collision is resolved axis-by-axis to prevent corner-clipping:
+
+```
+1. Apply gravity to velocity.y  (always, so the player probes the ground each frame)
+2. Snap velocity.x / velocity.z  to wish direction × walk speed
+3. For each axis (X then Y then Z):
+     feet += velocity[axis] * dt
+     if AABB overlaps any solid block → undo movement, zero that velocity component
+     if axis=Y and we just hit going downward → onGround = true
+4. camera.position = feet + (0, eyeHeight, 0)
+```
+
+Key values:
+
+| Constant       | Value   | Purpose                            |
+| -------------- | ------- | ---------------------------------- |
+| `GRAVITY`      | −28 /s² | Pulls the player down each frame   |
+| `JUMP_SPEED`   | 9 /s    | Upward velocity applied on jump    |
+| `WALK_SPEED`   | 5 /s    | Horizontal speed from WASD         |
+| `TERMINAL_VEL` | −50 /s  | Caps downward speed                |
+| `dt` cap       | 0.05 s  | Prevents tunneling after tab pause |
+
+### Controls (updated)
+
+- **Space** — Jump (only when `onGround` is true)
+- **WASD** — Walk (horizontal-only; pitch does not affect ground movement)
+- Mouse — Look
+
+---
+
 ## Future Steps (not implemented now)
 
-| Feature                  | Notes                                                         |
-| ------------------------ | ------------------------------------------------------------- |
-| Texture atlas            | Replace per-face colors with UV sampling from a sprite-sheet. |
-| Block breaking / placing | Raycast from camera into the chunk grid.                      |
-| Greedy meshing           | Merge coplanar same-type faces to cut vertex count ~70 %.     |
-| Frustum culling          | Skip `drawArrays` for chunks outside the camera frustum.      |
-| Infinite terrain         | Generate new chunks on the fly as the player moves.           |
-| Collision / gravity      | AABB sweep against the block grid.                            |
-| Ambient occlusion        | Darken vertices that are tucked into corners.                 |
+| Feature                  | Notes                                                                  |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Block breaking / placing | Raycast from camera into chunk grid; left=break, right=place.          |
+| Texture atlas            | Replace per-face colors with UV sampling from a sprite-sheet.          |
+| Greedy meshing           | Merge coplanar same-type faces to cut vertex count ~70 %.              |
+| Frustum culling          | Skip `drawArrays` for chunks whose AABB is outside the camera frustum. |
+| Infinite terrain         | Stream chunks in/out as the player moves (Simplex noise heightmap).    |
+| Ambient occlusion        | Darken vertices tucked into corners based on solid-neighbor count.     |

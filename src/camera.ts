@@ -28,6 +28,11 @@ export class Camera {
     return vec3.fromValues(Math.cos(this.yaw), 0, Math.sin(this.yaw));
   }
 
+  /** Forward projected onto the XZ plane – used for walking so pitch doesn't affect movement. */
+  getFlatForward(): vec3 {
+    return vec3.fromValues(Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+  }
+
   rotate(dx: number, dy: number): void {
     this.yaw += dx * this.sensitivity;
     this.pitch -= dy * this.sensitivity;

@@ -17,6 +17,40 @@ export class World {
   }
 
   /**
+   * Get the block type at world coordinates (wx, wy, wz).
+   * Returns Air for unloaded chunks or above the world.
+   * Returns Stone for positions below y=0 (bedrock).
+   */
+  getBlock(wx: number, wy: number, wz: number): BlockType {
+    if (wy < 0) return BlockType.Stone;
+    if (wy >= CHUNK_SIZE) return BlockType.Air;
+    const cx = Math.floor(wx / CHUNK_SIZE);
+    const cz = Math.floor(wz / CHUNK_SIZE);
+    const chunk = this.getChunk(cx, cz);
+    if (!chunk) return BlockType.Air;
+    // Local coords: safe for positive and negative world coordinates.
+    const lx = wx - cx * CHUNK_SIZE;
+    const lz = wz - cz * CHUNK_SIZE;
+    return chunk.getBlock(lx, wy, lz);
+  }
+
+  /**
+   * Set a block at world coordinates. Returns the affected Chunk
+   * so the caller can rebuild its mesh, or null if out of range.
+   */
+  setBlock(wx: number, wy: number, wz: number, type: BlockType): Chunk | null {
+    if (wy < 0 || wy >= CHUNK_SIZE) return null;
+    const cx = Math.floor(wx / CHUNK_SIZE);
+    const cz = Math.floor(wz / CHUNK_SIZE);
+    const chunk = this.getChunk(cx, cz);
+    if (!chunk) return null;
+    const lx = wx - cx * CHUNK_SIZE;
+    const lz = wz - cz * CHUNK_SIZE;
+    chunk.setBlock(lx, wy, lz, type);
+    return chunk;
+  }
+
+  /**
    * Generate a `gridSize × gridSize` set of chunks filled with a simple
    * sine-wave heightmap so there are gentle rolling hills.
    */
