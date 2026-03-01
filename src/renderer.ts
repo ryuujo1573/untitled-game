@@ -28,6 +28,29 @@ function uploadChunk(gl: WebGLRenderingContext, chunk: Chunk): void {
   gl.bufferData(gl.ARRAY_BUFFER, mesh.colors, gl.STATIC_DRAW);
 }
 
+/**
+ * Rebuilds and re-uploads the GPU buffers for the chunk that contains (wx,_,wz).
+ * Call this after placing or breaking a block.
+ */
+function rebuildChunk(
+  gl: WebGLRenderingContext,
+  world: World,
+  wx: number,
+  _wy: number,
+  wz: number,
+): void {
+  const cx = Math.floor(wx / CHUNK_SIZE);
+  const cz = Math.floor(wz / CHUNK_SIZE);
+  const chunk = world.getChunk(cx, cz);
+  if (!chunk) return;
+  // Delete old buffers.
+  if (chunk.posBuffer) gl.deleteBuffer(chunk.posBuffer);
+  if (chunk.colBuffer) gl.deleteBuffer(chunk.colBuffer);
+  chunk.posBuffer = null;
+  chunk.colBuffer = null;
+  uploadChunk(gl, chunk);
+}
+
 function EngineRenderer(gl: WebGLRenderingContext) {
   // ── Render state ────────────────────────────────────────
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -63,7 +86,9 @@ function EngineRenderer(gl: WebGLRenderingContext) {
   world.generate(4); // 4×4 chunks = 64×64 blocks
 
   const physics = new Physics(camera, world);
-  const input = new InputManager(canvas, camera, physics);
+  const input = new InputManager(canvas, camera, physics, world, (wx, wy, wz) =>
+    rebuildChunk(gl, world, wx, wy, wz),
+  );
 
   // Upload all chunk meshes
   world.chunks.forEach((chunk) => uploadChunk(gl, chunk));

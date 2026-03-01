@@ -117,7 +117,7 @@ class Camera {
 
 1. **Stuck keys.** When the window loses focus the browser never fires `keyup` for keys held at the time of the switch. Those keys stay in the `keys` Set and keep driving movement after focus returns.
 
-2. **Mouse delta burst.** When pointer lock is re-acquired (click after returning), some browsers flush accumulated `mousemove` events from the unfocused period all at once. These events fire *after* `pointerlockchange` sets `pointerLocked = true`, so every queued delta is processed in rapid succession and rotates the camera wildly.
+2. **Mouse delta burst.** When pointer lock is re-acquired (click after returning), some browsers flush accumulated `mousemove` events from the unfocused period all at once. These events fire _after_ `pointerlockchange` sets `pointerLocked = true`, so every queued delta is processed in rapid succession and rotates the camera wildly.
 
 **Fixes applied in `InputManager`:**
 
@@ -277,13 +277,88 @@ Key values:
 
 ---
 
+## Step 10 – Block Raycasting (`src/raycaster.ts`)
+
+### Algorithm – DDA (Digital Differential Analyzer)
+
+The ray traversal steps through the voxel grid one cell at a time, always advancing
+along the axis whose boundary is nearest:
+
+```
+1. For each axis compute:
+     tDelta[axis] = |1 / direction[axis]|        // world-units between successive crossings
+     tMax[axis]   = distance to first crossing    // from origin to the nearest grid line
+     step[axis]   = +1 or -1                      // which direction to walk
+
+2. Loop (up to maxDist / min(|dir|) iterations):
+     choose axis with smallest tMax value
+     cross that boundary  →  bx/by/bz += step[axis]
+     faceNormal = -step[axis] on that axis (direction we came from)
+     tMax[axis] += tDelta[axis]
+     if world.getBlock(bx,by,bz) is solid → return RayHit
+
+3. If no hit within maxDist units → return null
+```
+
+`RayHit` interface:
+
+```typescript
+interface RayHit {
+  bx: number;
+  by: number;
+  bz: number; // hit block grid coordinates
+  nx: number;
+  ny: number;
+  nz: number; // face normal (+1 or -1 on one axis)
+}
+```
+
+### Break & Place
+
+| Action | Input | Effect                                                                                            |
+| ------ | ----- | ------------------------------------------------------------------------------------------------- |
+| Break  | LMB   | `world.setBlock(hit.bx, hit.by, hit.bz, Air)` → `rebuildChunk()`                                  |
+| Place  | RMB   | `world.setBlock(hit.bx + hit.nx, hit.by + hit.ny, hit.bz + hit.nz, placeType)` → `rebuildChunk()` |
+
+The place position is the block adjacent to the hit face (`hit position + face normal`).
+Right-click context menu is suppressed via `contextmenu` event handler.
+
+### Chunk Rebuild
+
+`rebuildChunk(gl, world, chunkX, chunkY, chunkZ)` in `renderer.ts`:
+
+```
+1. Delete old GPU buffers (position + color) stored in the chunkBuffers map
+2. Call uploadChunk(gl, chunk) to re-generate the mesh and upload fresh buffers
+```
+
+Only the **one affected chunk** is rebuilt — neighbouring chunks are untouched unless
+the edited block sits on a chunk boundary (future improvement).
+
+### Block Cycling
+
+- **E key** — cycles `placeTypeIndex` through `PLACE_CYCLE = [Dirt, Grass, Stone]`
+- The hotbar DOM element updates immediately: `"Block: Grass  [E] to cycle"`
+
+### Controls (updated)
+
+| Key / Button | Action                                |
+| ------------ | ------------------------------------- |
+| LMB          | Break the targeted block              |
+| RMB          | Place selected block on targeted face |
+| E            | Cycle selected block type             |
+| Space        | Jump                                  |
+| WASD         | Walk                                  |
+| Mouse        | Look                                  |
+
+---
+
 ## Future Steps (not implemented now)
 
-| Feature                  | Notes                                                                  |
-| ------------------------ | ---------------------------------------------------------------------- |
-| Block breaking / placing | Raycast from camera into chunk grid; left=break, right=place.          |
-| Texture atlas            | Replace per-face colors with UV sampling from a sprite-sheet.          |
-| Greedy meshing           | Merge coplanar same-type faces to cut vertex count ~70 %.              |
-| Frustum culling          | Skip `drawArrays` for chunks whose AABB is outside the camera frustum. |
-| Infinite terrain         | Stream chunks in/out as the player moves (Simplex noise heightmap).    |
-| Ambient occlusion        | Darken vertices tucked into corners based on solid-neighbor count.     |
+| Feature           | Notes                                                                  |
+| ----------------- | ---------------------------------------------------------------------- |
+| Texture atlas     | Replace per-face colors with UV sampling from a sprite-sheet.          |
+| Greedy meshing    | Merge coplanar same-type faces to cut vertex count ~70 %.              |
+| Frustum culling   | Skip `drawArrays` for chunks whose AABB is outside the camera frustum. |
+| Infinite terrain  | Stream chunks in/out as the player moves (Simplex noise heightmap).    |
+| Ambient occlusion | Darken vertices tucked into corners based on solid-neighbor count.     |

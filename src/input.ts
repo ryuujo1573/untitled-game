@@ -1,6 +1,30 @@
 import { vec3 } from "gl-matrix";
 import { Camera } from "./camera";
 import { Physics } from "./physics";
+import { World } from "./world/world";
+import { BlockType } from "./world/block";
+import { raycast } from "./raycaster";
+
+/** Called after a block is placed or broken so the renderer can re-upload the chunk. */
+export type BlockEditCallback = (wx: number, wy: number, wz: number) => void;
+
+/** Cycle order for the held block type (press E to advance). */
+const PLACE_CYCLE: BlockType[] = [
+  BlockType.Dirt,
+  BlockType.Grass,
+  BlockType.Stone,
+];
+const PLACE_NAMES: Record<BlockType, string> = {
+  [BlockType.Air]: "Air",
+  [BlockType.Grass]: "Grass",
+  [BlockType.Dirt]: "Dirt",
+  [BlockType.Stone]: "Stone",
+};
+
+function updateHotbar(type: BlockType): void {
+  const el = document.getElementById("hotbar");
+  if (el) el.textContent = `Block: ${PLACE_NAMES[type]}  [E] to cycle`;
+}
 
 /**
  * Manages keyboard + pointer-lock mouse input.
@@ -11,7 +35,13 @@ export class InputManager {
   private keys = new Set<string>();
   private camera: Camera;
   private physics: Physics;
+  private world: World;
+  private onBlockEdit: BlockEditCallback;
   private pointerLocked = false;
+  private placeTypeIndex = 0;
+  get placeBlockType(): BlockType {
+    return PLACE_CYCLE[this.placeTypeIndex];
+  }
   /**
    * After (re-)acquiring pointer lock, skip this many mousemove events.
    * Browsers queue up accumulated mouse deltas from while the window was
@@ -23,22 +53,65 @@ export class InputManager {
   // Pre-allocated scratch vectors to avoid per-frame GC pressure.
   private wish = vec3.create();
 
-  constructor(canvas: HTMLCanvasElement, camera: Camera, physics: Physics) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    camera: Camera,
+    physics: Physics,
+    world: World,
+    onBlockEdit: BlockEditCallback,
+  ) {
     this.camera = camera;
     this.physics = physics;
+    this.world = world;
+    this.onBlockEdit = onBlockEdit;
+    // Initialise hotbar display.
+    updateHotbar(this.placeBlockType);
 
     window.addEventListener("keydown", (e) => {
       this.keys.add(e.code);
-      // Prevent Space from scrolling the page when not pointer-locked.
       if (e.code === "Space") e.preventDefault();
+      // Cycle held block type with E.
+      if (e.code === "KeyE" && this.pointerLocked) {
+        this.placeTypeIndex = (this.placeTypeIndex + 1) % PLACE_CYCLE.length;
+        updateHotbar(PLACE_CYCLE[this.placeTypeIndex]);
+      }
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
-
-    // Clear held keys when the window loses focus so they don't stay
-    // "pressed" when the user alt+tabs away and comes back.
     window.addEventListener("blur", () => this.keys.clear());
 
-    canvas.addEventListener("click", () => canvas.requestPointerLock());
+    // Left-click: request pointer lock when not locked; break block when locked.
+    // Right-click: place block when locked.
+    canvas.addEventListener("mousedown", (e) => {
+      if (!this.pointerLocked) {
+        canvas.requestPointerLock();
+        return;
+      }
+      const hit = raycast(
+        this.camera.position,
+        this.camera.getForward(),
+        this.world,
+      );
+      if (!hit) return;
+      if (e.button === 0) {
+        // Break
+        this.world.setBlock(hit.bx, hit.by, hit.bz, BlockType.Air);
+        this.onBlockEdit(hit.bx, hit.by, hit.bz);
+      } else if (e.button === 2) {
+        // Place on the face normal
+        const px = hit.bx + hit.nx;
+        const py = hit.by + hit.ny;
+        const pz = hit.bz + hit.nz;
+        // Don't place inside the player.
+        if (!this.world.setBlock(px, py, pz, this.placeBlockType)) return;
+        this.onBlockEdit(px, py, pz);
+      }
+    });
+    // Suppress right-click context menu.
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    canvas.addEventListener("click", () => {
+      if (!this.pointerLocked) canvas.requestPointerLock();
+    });
 
     document.addEventListener("pointerlockchange", () => {
       const wasLocked = this.pointerLocked;
