@@ -211,6 +211,11 @@ function EngineRenderer(gl: WebGLRenderingContext) {
 
     // Draw each chunk (frustum culled)
     let drawCalls = 0;
+    let drawnVerts = 0;
+    let totalVerts = 0;
+    world.chunks.forEach((chunk) => {
+      totalVerts += chunk.vertexCount;
+    }); // pre-sum
     world.chunks.forEach((chunk) => {
       if (chunk.vertexCount === 0 || !chunk.posBuffer || !chunk.uvBuffer)
         return;
@@ -242,15 +247,21 @@ function EngineRenderer(gl: WebGLRenderingContext) {
       gl.bindBuffer(gl.ARRAY_BUFFER, chunk.posBuffer);
       gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
 
-      // Bind UV + light attribute
+      // Bind UV + light attribute (vec4: localU, localV, tileIndex, light)
       gl.enableVertexAttribArray(aUVL);
       gl.bindBuffer(gl.ARRAY_BUFFER, chunk.uvBuffer);
-      gl.vertexAttribPointer(aUVL, 3, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribPointer(aUVL, 4, gl.FLOAT, false, 0, 0);
 
       gl.drawArrays(gl.TRIANGLES, 0, chunk.vertexCount);
+      drawnVerts += chunk.vertexCount;
     });
 
-    debug.update(camera, world, { drawCalls, totalChunks: world.chunks.size });
+    debug.update(camera, world, {
+      drawCalls,
+      totalChunks: world.chunks.size,
+      drawnVertices: drawnVerts,
+      totalVertices: totalVerts,
+    });
   }
 
   frame();

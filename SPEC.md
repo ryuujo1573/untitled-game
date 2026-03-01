@@ -670,10 +670,106 @@ OS      Win32
 
 ---
 
+## Step 15 — Greedy Meshing
+
+### Goal
+
+Replace the naïve per-block face emitter with Mikola Lysenko's greedy meshing
+algorithm to dramatically cut GPU vertex count on flat terrain.
+
+### Why it matters
+
+The naïve approach emits up to 6 quads (36 vertices) per solid block. On a
+flat 16×16 layer of Grass, that is 256 quads just for the top faces. Greedy
+meshing merges the entire layer into **one** quad (6 vertices), cutting vertex
+count by ~98 % for flat surfaces and ~70 % overall on typical terrain.
+
+### Algorithm
+
+For each of the 6 face directions and for each slice perpendicular to that
+direction:
+
+1. **Build a 16×16 visibility mask** — each cell holds the atlas tile index of
+   the visible face, or −1 if the face is hidden (neighbour is solid or the
+   cell is Air).
+
+2. **Greedy sweep** — scan the mask left-to-right, top-to-bottom. For each
+   unvisited visible cell:
+   - Grow **width** rightward as long as the next cell has the same tile index.
+   - Grow **height** downward as long as every cell in the row matches.
+   - Mark all merged cells as `used`.
+   - Emit **one quad** for the merged rectangle (4 corners → 6 vertices).
+
+3. Repeat for all slices and all 6 directions.
+
+### Vertex data format change
+
+| Field       | Old (vec3) | New (vec4)                            |
+| ----------- | ---------- | ------------------------------------- |
+| component 0 | atlas U    | **localU** (0 → quad width)           |
+| component 1 | atlas V    | **localV** (0 → quad height)          |
+| component 2 | light      | **tileIndex** (integer 0–3, as float) |
+| component 3 | —          | **light** multiplier                  |
+
+The **vertex shader** now computes atlas UV at runtime:
+
+```glsl
+const float TILE_W = 1.0 / 4.0;          // one tile's share of atlas width
+v_uv = vec2(a_uvl.z * TILE_W + fract(a_uvl.x) * TILE_W,
+            fract(a_uvl.y));
+```
+
+`fract()` tiles the 16 px atlas sprite across the merged quad, so a W×H quad
+renders as W×H texture repetitions. Single-tile quads (W=H=1) behave
+identically to the old pre-computed atlas UV approach.
+
+### Face configuration table
+
+Six `SliceDef` entries replace the old `FaceDef` / `FACES` table. Each entry
+specifies the slice axis, two expansion axes, the neighbour direction, and the
+face-plane offset:
+
+| Face        | sliceAxis | dim0 | dim1 | normalSign | light |
+| ----------- | --------- | ---- | ---- | ---------- | ----- |
+| +Y (top)    | Y         | X    | Z    | +1         | 1.0   |
+| -Y (bottom) | Y         | X    | Z    | −1         | 0.5   |
+| +X (right)  | X         | Z    | Y    | +1         | 0.8   |
+| -X (left)   | X         | Z    | Y    | −1         | 0.8   |
+| +Z (front)  | Z         | X    | Y    | +1         | 0.7   |
+| -Z (back)   | Z         | X    | Y    | −1         | 0.7   |
+
+Winding rules for −X and −Z reverse the U axis along `dim0` so the texture
+orientation matches the naïve mesher exactly.
+
+### Renderer change
+
+`gl.vertexAttribPointer(aUVL, 4, gl.FLOAT, false, 0, 0)` — size changed from 3
+to 4.
+
+### F3 debug panel addition
+
+```
+Renderer
+FPS    144
+Chunks 9 / 16  (7 culled)
+Verts  12.4k / 23.1k
+```
+
+`drawnVertices` and `totalVertices` are summed in the render loop and passed
+via `RenderStats`. They are displayed in thousands (`k`) for readability.
+
+### Expected reduction (4×4 chunk world)
+
+| Surface              | Naïve verts               | Greedy verts | Reduction |
+| -------------------- | ------------------------- | ------------ | --------- |
+| Flat grass top layer | 256 × 6 = 1 536 per chunk | 6 per chunk  | ~99 %     |
+| Sinusoidal terrain   | varies                    | ~70 % fewer  | ~70 %     |
+
+---
+
 ## Future Steps (not implemented now)
 
 | Feature           | Notes                                                               |
 | ----------------- | ------------------------------------------------------------------- |
-| Greedy meshing    | Merge coplanar same-type faces to cut vertex count ~70 %.           |
 | Infinite terrain  | Stream chunks in/out as the player moves (Simplex noise heightmap). |
 | Ambient occlusion | Darken vertices tucked into corners based on solid-neighbor count.  |

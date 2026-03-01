@@ -7,6 +7,8 @@ import Time from "./time-manager";
 export interface RenderStats {
   drawCalls: number;
   totalChunks: number;
+  drawnVertices: number;
+  totalVertices: number;
 }
 
 // ── Cardinal direction table ────────────────────────────────────
@@ -185,6 +187,7 @@ export class DebugOverlay {
       `<span class="dbg-section">Renderer</span>\n` +
       `FPS    ${Time.GetFPS().toFixed(0)}\n` +
       `Chunks ${stats.drawCalls} / ${stats.totalChunks}  (${stats.totalChunks - stats.drawCalls} culled)\n` +
+      `Verts  ${(stats.drawnVertices / 1000).toFixed(1)}k / ${(stats.totalVertices / 1000).toFixed(1)}k\n` +
       `\n` +
       `<span class="dbg-section">Position</span>\n` +
       `XYZ   ${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}\n` +
