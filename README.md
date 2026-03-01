@@ -1,110 +1,123 @@
-# WebGL Hello World - Template Project
-This section is still underconstruction, this repository is generated from another repository where I learned WebGL!
+# WebGL 3D Scaffold
 
-# Project Requirement Notes
-- Have nodejs & npm
-  1. Download nodejs & npm (nvm is better than using nodejs installer!)
-    - nvm (use nvm to download nodejs!) > https://github.com/nvm-sh/nvm
-    - nodejs (I suggest use nvm to install nodejs!) > https://nodejs.org/en
-    - npm > https://docs.npmjs.com/downloading-and-installing-node-js-and-npm
-  2. Check if you downloaded them properly by doing the below:
-    - ```node -v```
-    - ```npm -v```
+A minimal WebGL 1.0 starter project built with **TypeScript** and **Vite**. It renders an interpolated-color triangle and provides a clean architecture you can extend into a full 3D application.
 
-# Building the project
-1. Install dependencies using ```npm i``` in your terminal
-2. Run & start the project using ```npm run dev``` in terminal again
-3. The website should automatically open on ```localhost:5173```! (Check the terminal incase its a different port! If it is taken Vite will automatically try the next available port.)
-
-# My Platform, Versioning, & Dev environment
-I will list what I used, just incase for anyone wondering what I used/platform choice to make this project.
-- Mac (Sonoma 14) & Windows 10
-- Visual Studio Code / Cursor
-- npm version ```npm -v```  10.8.2
-- node version ```node -v``` v20.17.0
-- nvm version ```nvm -v``` 0.39.0
-
-## Project Dependencies
-  - **Typescript**
-    - For obvious reasons.  
-  - **Vite**
-    - Vite fixed many issues I had previously.
-  - **WebGL**
-    - Make sure your browser/machine supports WebGL! 
-  - *Old/Previous Packages (IGNORE THIS)*
-    - Was using lite-server & watcher (replaced by vite).
-
-## Guide to run Typescript code locally in VSC
-***SKIP THIS IF YOU DONT CARE ABOUT COMPILING PURE TS CODE BY ITSELF!***
-  1. Pre-pre-requsite note, please if you are on windows just use a cmdprompt terminal in VSC & not powershell, for some reason powershell was auto defaulted for me & it made things worse.
-  2. Pre-requsites have nodejs & npm check by doing: 
-       - mac/terminal > ```node -v && npm -v```
-       - windows/powershell > ```node -v ; npm -v```
-       - windows/cmdprompt > ```node -v && npm -v```
-  3. Install typescript compiler globally via npm ```npm install -g typescript```
-  4. Compile typescript code ```tsc filename.ts```
-  5. Run compiled javascript code ```node filename.js```
-     - ```tsc``` converts your TS to JS & ultimately we just run the JS file, you can do all this with just this 1 command that just merges the two together, check below:
-       - mac/terminal > ```tsc filename.ts && node filename.js```
-       - windows/powershell > ```tsc.cmd filename.ts ; node filename.js```
-       - windows/cmdprompt > ```tsc filename.ts && node filename.js```
-
-# Resources
-- Learn the javascript runtime/event loop it's very important
-  - https://www.freecodecamp.org/news/javascript-engine-and-runtime-explained/
-  - https://www.youtube.com/watch?v=eiC58R16hb8&
-  - https://www.youtube.com/watch?v=8aGhZQkoFbQ&
-- [MDN Docs](https://developer.mozilla.org/en-US/)
-- [MDN Docs - Learn full web development from scratch](https://developer.mozilla.org/en-US/docs/Learn)
-- [chatgpt.com](https://chatgpt.com/)
-  - I'm going to use GPT to help me clarify shit while learning some of the topics below + I will need it especially when doing matrix multiplication & when I need an explanation on what happens when an object goes through 50 transformation calcs lmfao
-- Important things to learn!
-  - [stenciljs.com](https://stenciljs.com/)
-  - [MDN Docs - Web Components](https://developer.mozilla.org/en-US/docs/Web/API/Web_components)
-  - [MDN Docs - Web DOM](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model/Introduction)
-  - [Awesome Web Components - Learn](https://github.com/web-padawan/awesome-web-components)
-- WebGL Resources
-  - [learnwebgl.brown37.net](https://learnwebgl.brown37.net/rendering/introduction.html)
-  - [webglfundamentals.org](https://webglfundamentals.org/)
-  - [MDN Docs - Web GL](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Getting_started_with_WebGL) This resource is insanely good (Just my personal opinion, above 2 are suggested heavily by seasoned graphics engineers!)
-- WebGPU Resources (Advanced / Later on)
-  - [LearnWebGPU](https://eliemichel.github.io/LearnWebGPU/)
-  - [webgpufundamentals.org](https://webgpufundamentals.org/)
-- JS/TS Resources
-  - I heard MDN docs isn't "good" for learning JS/TS it's best for references, but they do have resources (I won't be listing them here!), I'm not sure of what is a popular good resource in this area (JS/TS) unlike my expertise in other fields but I will try to list what I have seen suggested by strong web developers in specializations I have delved into the past.
-  - [learn-js](https://www.learn-js.org/) / [learn-ts](https://www.learn-ts.org/)
-  - [Codecademy-js](https://www.codecademy.com/learn/introduction-to-javascript) / [Codecademy-ts](https://www.codecademy.com/learn/learn-typescript)
-  - [freecodecamp/learn-js&ts](https://www.freecodecamp.org/learn/) I have seen this as popularly suggested as the above resource!
-  - [typescriptlang.org-ts](https://www.typescriptlang.org/docs/) a very good website for typescript related docs & learning ts in general!
-  - [theodinproject-js](https://www.theodinproject.com/) popular suggestions I have seen multiple times about learning javascript!
-- Hosting Notes (Ignore):
-  - Was looking into hosting services and found this, its a nice website! > https://wheretohostmy.app/free-tier-comparison
-  - Used Netlify and it was really fast to setup. Just drag & drop the built project dist files into the host service & thats it! You can get the dist file by doing ```npm run build``` and the dist file will be created.
-
-# Important Computer Graphics Concepts
-This is here to list important topics & showcase some things I went through whilst learning CG & WebGL!  
-*I want to make this clear, but im trying to learn more about CG rather than WebGL right now, since if you know CG you will adapt to any graphics specification!*
-
-- Projections!
-  - Prespective Projection - [Brendan Galea take on Perspective Projection](https://www.youtube.com/watch?v=U0_ONQQ5ZNM&ab_channel=BrendanGalea) | [ScratchAPixel](https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/projection-matrix-introduction.html)
-  - Orthographic centering calculation - https://www.desmos.com/calculator/2dzuo1zxky | https://www.desmos.com/calculator/txn0gkfylk
-- Model View Projection Matrix
-  - https://jsantell.com/model-view-projection/
-- Homogenous Coordinates
-  - https://www.youtube.com/watch?v=o-xwmTODTUI
-- Important Linear Algebra + Matrix Concepts in CG!
-  - The list below is things I didn't want to put separately on top of this section, but needed to be mentioned.
-  - Matrix Multiplication
-  - Translation, Rotation, Scale Matricies / Homogenous Coordinates / Matrix Order
-  - Column Major Order vs Row Major Order
-  - Matrix Inverse (No need to go in deep but try to understand this concept for the camera!)
-
-## Interpolated Triangle - With full refactored backend
 <p align="center">
   <img src="readme-images/1-Hello-World-Interpolated.png" width=100% >
 </p>
-This project was originally a learning project now refactored for a vanilla boilerplate triangle project, for me to start back again from scratch, with most things provided!
 
-# Other projects I worked on generated from this!
-- Voxxer Project Continuation: https://github.com/j-2k/VoxxerWebGL
+## Quick Start
 
+**Prerequisites:** [Node.js](https://nodejs.org/) (v18+) and npm.
+
+```bash
+npm install      # install dependencies
+npm run dev      # start Vite dev server (opens localhost:5173)
+npm run build    # production build → dist/
+```
+
+## Tech Stack
+
+| Tool           | Purpose                                   |
+| -------------- | ----------------------------------------- |
+| **TypeScript** | Type-safe source code                     |
+| **Vite**       | Dev server with hot-reload & bundling     |
+| **gl-matrix**  | Fast vector / matrix math (vec3, mat4, …) |
+| **WebGL 1.0**  | Browser-native 3D graphics API            |
+
+## Project Structure
+
+```
+src/
+├── main.ts              Entry point – gets the WebGL context, starts the renderer
+├── canvas.ts            Creates <canvas> and obtains WebGLRenderingContext
+├── renderer.ts          Core render loop (Start → Update via requestAnimationFrame)
+├── renderer-utils.ts    Shader compilation & program linking helpers
+├── shader-materials.ts  Imports GLSL files and groups them into material objects
+├── time-manager.ts      Static Time class – deltaTime, elapsed time, FPS
+├── messages.ts          DOM helpers (title, nav bar)
+├── style.css            Page styles
+└── shaders/
+    ├── unlit/            Vertex + Fragment shader (vertex colors, model matrix)
+    └── texture/          Vertex + Fragment shader (texture sampling)
+```
+
+## How It Works — Step by Step
+
+If you're new to WebGL, here is the journey a single frame takes through this codebase:
+
+### 1. Obtain a WebGL Context (`canvas.ts`)
+
+A `<canvas>` element is already in `index.html`. `initializeCanvas()` calls `canvas.getContext("webgl")` to get a `WebGLRenderingContext` — the object through which every WebGL call is made.
+
+### 2. Configure Render State (`renderer.ts → RenderingSettings`)
+
+Before drawing anything the renderer sets a few global GPU states:
+
+- **Viewport** — maps clip-space (−1…1) to the canvas pixel dimensions.
+- **Depth test** — ensures closer triangles draw on top of farther ones.
+- **Back-face culling** — skips triangles facing away from the camera (counter-clockwise winding = front).
+
+### 3. Compile Shaders (`renderer-utils.ts`)
+
+WebGL requires two small GPU programs written in **GLSL**:
+
+| Shader              | Runs once per… | Job                                                                          |
+| ------------------- | -------------- | ---------------------------------------------------------------------------- |
+| **Vertex shader**   | vertex         | Transforms 3D positions into clip-space; passes color to the fragment stage. |
+| **Fragment shader** | pixel          | Outputs the final color for each pixel inside the triangle.                  |
+
+`CompileShaderSource()` compiles GLSL source text into a shader object. `CreateShaderProgram()` links a vertex + fragment shader into a _program_ the GPU can execute.
+
+> GLSL source files live under `src/shaders/` and are imported as raw strings via Vite's `?raw` suffix (see `shader-materials.ts`).
+
+### 4. Upload Geometry & Attributes (`renderer.ts → Start`)
+
+Geometry data lives in plain `Float32Array`s. The scaffold defines a single triangle:
+
+```
+Positions          Colors (RGB)
+ 0.0,  0.8, 0.0   1, 0, 0  (red)
+-0.8, -0.8, 0.0   0, 1, 0  (green)
+ 0.8, -0.8, 0.0   0, 0, 1  (blue)
+```
+
+Each array is uploaded to the GPU via a **buffer** (`gl.createBuffer` → `gl.bufferData`), then connected to the corresponding shader `attribute` with `gl.vertexAttribPointer`.
+
+### 5. Set Uniforms
+
+**Uniforms** are values that stay constant for every vertex/pixel in one draw call:
+
+- `u_resolution` — canvas width & height
+- `u_color` — a fallback flat colour
+- `u_modelMatrix` — a 4×4 transformation matrix (translate / rotate / scale), built with `gl-matrix`
+
+### 6. Draw (`gl.drawArrays`)
+
+`gl.drawArrays(gl.TRIANGLES, 0, 3)` tells the GPU: _"take the first 3 vertices from the bound buffers and rasterize them as a triangle."_ The vertex shader runs 3 times, then the fragment shader runs for every pixel inside the triangle — producing the smooth colour gradient.
+
+### 7. Animation Loop (`renderer.ts → UpdateCore`)
+
+`requestAnimationFrame` drives a continuous loop:
+
+```
+UpdateCore  →  Time.CalculateTimeVariables()  →  Update()  →  UpdateCore …
+```
+
+`Time` (in `time-manager.ts`) tracks `deltaTime` and total elapsed `time`, so you can animate objects frame-independently.
+
+## Extending the Scaffold
+
+| Goal              | Where to start                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a new mesh    | Create new vertex data in `Start()`, upload to a buffer, and issue another `gl.drawArrays` call.                                                  |
+| Add a new shader  | Create a folder under `src/shaders/`, write `.glsl` files, import them in `shader-materials.ts`, and use `ShaderUtilites.CreateShaderMaterial()`. |
+| Animate an object | In `Update()`, modify the model matrix each frame using `gl-matrix` (`mat4.rotate`, etc.) and re-upload it as a uniform.                          |
+| Add a camera      | Build view & projection matrices with `mat4.lookAt` / `mat4.perspective` and pass them as uniforms to the vertex shader.                          |
+
+## WebGL Resources
+
+- [WebGL Fundamentals](https://webglfundamentals.org/) — practical, project-oriented tutorials
+- [Learn WebGL (Brown)](https://learnwebgl.brown37.net/rendering/introduction.html) — in-depth rendering theory
+- [MDN WebGL Tutorial](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Getting_started_with_WebGL) — official reference-style guide
+- [Model-View-Projection Explained](https://jsantell.com/model-view-projection/) — visual walkthrough of MVP matrices
