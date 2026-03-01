@@ -12,6 +12,13 @@ export class InputManager {
   private camera: Camera;
   private physics: Physics;
   private pointerLocked = false;
+  /**
+   * After (re-)acquiring pointer lock, skip this many mousemove events.
+   * Browsers queue up accumulated mouse deltas from while the window was
+   * unfocused and flush them the moment the pointer is locked again, causing
+   * a violent camera sweep.  Draining a few frames eliminates that burst.
+   */
+  private skipMouseEvents = 0;
 
   // Pre-allocated scratch vectors to avoid per-frame GC pressure.
   private wish = vec3.create();
@@ -27,14 +34,34 @@ export class InputManager {
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
 
+    // Clear held keys when the window loses focus so they don't stay
+    // "pressed" when the user alt+tabs away and comes back.
+    window.addEventListener("blur", () => this.keys.clear());
+
     canvas.addEventListener("click", () => canvas.requestPointerLock());
 
     document.addEventListener("pointerlockchange", () => {
+      const wasLocked = this.pointerLocked;
       this.pointerLocked = document.pointerLockElement === canvas;
+
+      if (!this.pointerLocked) {
+        // Lost lock (alt+tab, Escape, etc.) – clear key state so no
+        // movement action stays active while the window is unfocused.
+        this.keys.clear();
+      } else if (!wasLocked) {
+        // Just re-acquired lock – schedule skip of the next few mouse
+        // events to drain any queued delta burst from the OS.
+        this.skipMouseEvents = 5;
+      }
     });
 
     document.addEventListener("mousemove", (e) => {
-      if (this.pointerLocked) this.camera.rotate(e.movementX, e.movementY);
+      if (!this.pointerLocked) return;
+      if (this.skipMouseEvents > 0) {
+        this.skipMouseEvents--;
+        return;
+      }
+      this.camera.rotate(e.movementX, e.movementY);
     });
   }
 

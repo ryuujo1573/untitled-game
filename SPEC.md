@@ -109,6 +109,30 @@ class Camera {
 - On `mousemove` during pointer-lock → feed dx/dy to `camera.rotate()`.
 - Every frame, read the key set and call `camera.moveForward/Right/Up` scaled by `Time.deltaTime`.
 
+### Known bug fix — alt+tab camera sweep
+
+**Symptoms:** After switching to another app with Alt+Tab and returning, the camera sweeps uncontrollably and movement keys get stuck.
+
+**Root causes (two separate issues):**
+
+1. **Stuck keys.** When the window loses focus the browser never fires `keyup` for keys held at the time of the switch. Those keys stay in the `keys` Set and keep driving movement after focus returns.
+
+2. **Mouse delta burst.** When pointer lock is re-acquired (click after returning), some browsers flush accumulated `mousemove` events from the unfocused period all at once. These events fire *after* `pointerlockchange` sets `pointerLocked = true`, so every queued delta is processed in rapid succession and rotates the camera wildly.
+
+**Fixes applied in `InputManager`:**
+
+```
+window blur          → keys.clear()
+                       Prevents phantom key-holds while the window is out of focus.
+
+pointerlockchange
+  lost lock          → keys.clear()  (safety net, covers Esc as well)
+  gained lock        → skipMouseEvents = 5
+                       Discards the next 5 mousemove events to drain the OS queue.
+
+mousemove handler    → if (skipMouseEvents > 0) { skipMouseEvents--; return; }
+```
+
 ---
 
 ## Step 4 – Block Types (`src/world/block.ts`)
