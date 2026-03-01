@@ -7,11 +7,17 @@ export enum BlockType {
 }
 
 /**
- * Base color for each block type (RGB 0-1).
- * Side / bottom faces are automatically darkened by the mesh builder.
+ * Maps each block type to the atlas tile index for each face.
+ * Face order: [+Y (top), -Y (bottom), +X, -X, +Z, -Z]
+ *
+ * Atlas tile layout (4 tiles × 16 px wide, 64×16 texture):
+ *   0 = grass_top   1 = grass_side   2 = dirt   3 = stone
  */
-export const BlockColor: Record<number, [number, number, number]> = {
-  [BlockType.Grass]: [0.3, 0.7, 0.2],
-  [BlockType.Dirt]: [0.55, 0.36, 0.2],
-  [BlockType.Stone]: [0.5, 0.5, 0.5],
+export const BlockFaceTile: Record<
+  number,
+  [number, number, number, number, number, number]
+> = {
+  [BlockType.Grass]: [0, 2, 1, 1, 1, 1],
+  [BlockType.Dirt]: [2, 2, 2, 2, 2, 2],
+  [BlockType.Stone]: [3, 3, 3, 3, 3, 3],
 };

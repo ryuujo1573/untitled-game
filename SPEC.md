@@ -353,11 +353,146 @@ the edited block sits on a chunk boundary (future improvement).
 
 ---
 
+---
+
+## Step 11 – Texture Atlas (`src/renderer.ts` + shaders)
+
+### Atlas layout
+
+A **64 × 16** pixel texture is generated at runtime using Canvas 2D (no external PNG).
+It contains 4 tiles of 16 × 16 px each, laid out horizontally:
+
+| Tile index | Content      | Used by                              |
+| ---------- | ------------ | ------------------------------------ |
+| 0          | `grass_top`  | Grass block +Y face                  |
+| 1          | `grass_side` | Grass block side faces (+X/−X/+Z/−Z) |
+| 2          | `dirt`       | Grass block −Y face + all Dirt faces |
+| 3          | `stone`      | All Stone faces                      |
+
+`BlockFaceTile` in `block.ts` maps each `BlockType` to a 6-element tuple
+`[+Y, -Y, +X, -X, +Z, -Z]` of tile indices.
+
+### Procedural pixel art
+
+`createAtlasTexture(gl)` in `renderer.ts` uses a deterministic hash to add
+per-pixel noise variation so tiles look like pixel art without any external asset:
+
+```
+hash(x, y, seed) → [0,1]
+  n < 0.2  → dark shade
+  n > 0.8  → light shade
+  else     → base colour
+```
+
+The grass-side tile draws the dirt body first, then overrides the top 3 rows with
+green pixels to simulate Minecraft's grass-side face.
+
+`UNPACK_FLIP_Y_WEBGL = true` is set before `texImage2D` so canvas row 0 (top)
+maps to UV `v = 1.0` (top of world face) instead of the default `v = 0.0`.
+
+### Canonical face UVs
+
+All 6 face types share the same 6-vertex UV pattern (unit quad, CCW winding):
+
+```
+CANONICAL_UVS = [0,0,  0,1,  1,1,  0,0,  1,1,  1,0]
+```
+
+Atlas UV for each vertex:
+
+```
+atlasU = tileIndex / ATLAS_TILES + localU * (1 / ATLAS_TILES)
+atlasV = localV
+```
+
+### Shader changes
+
+| Old (`v_color` path)     | New (`a_uvl` path)                          |
+| ------------------------ | ------------------------------------------- |
+| `attribute vec3 a_color` | `attribute vec3 a_uvl` (xy = UV, z = light) |
+| `varying vec3 v_color`   | `varying vec2 v_uv; varying float v_light`  |
+| `gl_FragColor = v_color` | `texture2D(u_atlas, v_uv).rgb * v_light`    |
+
+The light multiplier from `FaceDef.light` (top=1.0, sides=0.7–0.8, bottom=0.5)
+is packed as the `z` component of `a_uvl`, replacing the old per-component colour
+darkening.
+
+---
+
+## Step 12 – Texture UV Fix + F3 Debug Overlay (`src/debug.ts`)
+
+### UV rotation fix
+
+The single `CANONICAL_UVS` pattern was correct for faces whose first planar axis
+naturally maps to U, but produced a **90 ° rotation** on faces where the vertex
+ordering has the vertical axis varying first.
+
+Two named patterns now live in `chunk.ts`:
+
+| Pattern | Values (12 floats, 6 vertices) | Faces                                   |
+| ------- | ------------------------------ | --------------------------------------- |
+| `UV_A`  | `0,0, 0,1, 1,1, 0,0, 1,1, 1,0` | +Y (U=X V=Z), +X (U=Z V=Y), −X (mirror) |
+| `UV_B`  | `0,0, 1,0, 1,1, 0,0, 1,1, 0,1` | −Y (U=X V=Z), +Z (U=X V=Y), −Z (mirror) |
+
+`FaceDef` has a new `uvs: number[]` field; `buildMesh()` uses `face.uvs[v*2]` /
+`face.uvs[v*2+1]` instead of the old global constant.
+
+### F3 Debug Overlay
+
+Press **F3** to toggle a HUD panel (`#debug-panel`) that appears in the top-left
+corner. It is invisible by default and adds zero per-frame cost when hidden.
+
+#### Text panel (`#debug-text`)
+
+| Section      | Fields                                                        |
+| ------------ | ------------------------------------------------------------- |
+| Position     | XYZ (float), Block coords (int)                               |
+| Facing       | Cardinal 8-way (N/NE/E …), yaw °, pitch °                     |
+| Target block | Block type name, world coords, chunk + local coords, face hit |
+
+Cardinal direction from yaw:
+
+```
+yaw = 0   → -Z = North
+yaw = π/2 → +X = East
+8 bins of 45° each, round-nearest
+```
+
+A raycast is run every frame (max 6 blocks) to populate the Target section.
+
+#### 3-D compass canvas (`#debug-compass`, 96 × 96 px)
+
+Draws the three world axes (X=red Y=green Z=blue) projected onto 2D using the
+camera's yaw + pitch as a simplified view transform:
+
+```
+screenX = right · worldVec   (right = [cos yaw, 0, sin yaw])
+screenY = viewUp · worldVec  (approx camera-space up)
+depth   = forward · worldVec (used for painter's-algorithm sort)
+```
+
+Axes are sorted back-to-front so closer arrows paint over farther ones.
+Negative half-axes are drawn at 55 % length in a dark tint.
+A white centre dot anchors the origin.
+
+### Controls (updated)
+
+| Key / Button | Action                                |
+| ------------ | ------------------------------------- |
+| F3           | Toggle debug overlay                  |
+| LMB          | Break the targeted block              |
+| RMB          | Place selected block on targeted face |
+| E            | Cycle selected block type             |
+| Space        | Jump                                  |
+| WASD         | Walk                                  |
+| Mouse        | Look                                  |
+
+---
+
 ## Future Steps (not implemented now)
 
 | Feature           | Notes                                                                  |
 | ----------------- | ---------------------------------------------------------------------- |
-| Texture atlas     | Replace per-face colors with UV sampling from a sprite-sheet.          |
 | Greedy meshing    | Merge coplanar same-type faces to cut vertex count ~70 %.              |
 | Frustum culling   | Skip `drawArrays` for chunks whose AABB is outside the camera frustum. |
 | Infinite terrain  | Stream chunks in/out as the player moves (Simplex noise heightmap).    |

@@ -16,9 +16,19 @@
   <body>
     <canvas id="webglCanvas"></canvas>
     <div id="crosshair">+</div>
+    <canvas
+      id="debug-compass"
+      width="96"
+      height="96"
+      style="display: none"
+    ></canvas>
     <div id="hotbar">Block: Dirt [E] to cycle</div>
     <div id="help">
-      WASD move · Space jump · LMB break · RMB place · E cycle block
+      WASD move · Space jump · LMB break · RMB place · E cycle block · F3 debug
+    </div>
+    <!-- F3 debug overlay (hidden until F3 is pressed) -->
+    <div id="debug-panel" style="display: none">
+      <pre id="debug-text"></pre>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

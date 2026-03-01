@@ -1,6 +1,9 @@
 precision mediump float;
-varying vec3 v_color;
+varying vec2 v_uv;
+varying float v_light;
+uniform sampler2D u_atlas;
 
 void main() {
-    gl_FragColor = vec4(v_color, 1.0);
+    vec4 tex = texture2D(u_atlas, v_uv);
+    gl_FragColor = vec4(tex.rgb * v_light, tex.a);
 }

@@ -1,4 +1,4 @@
-import { BlockType, BlockColor } from "./block";
+import { BlockType, BlockFaceTile } from "./block";
 
 export const CHUNK_SIZE = 16;
 const TOTAL = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE; // 4096
@@ -8,11 +8,26 @@ function idx(x: number, y: number, z: number): number {
   return x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE;
 }
 
+/** Number of tiles in one row of the texture atlas. */
+const ATLAS_TILES = 4;
+
+// ── UV patterns ─────────────────────────────────────────────────
+// Each pattern defines local UVs for 6 vertices (2 triangles).
+//
+// Pattern A – the first planar axis becomes U, second becomes V.
+//   Correct for:  +Y (U=X V=Z),  +X (U=Z V=Y),  -X (U=1-Z V=Y)
+// Pattern B – horizontal world axis becomes U, vertical becomes V.
+//   Correct for:  -Y (U=X V=Z),  +Z (U=X V=Y),  -Z (U=1-X V=Y)
+const UV_A = [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0];
+const UV_B = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1];
+
 // ── Face geometry tables ────────────────────────────────────────
-// Each face has 6 vertex offsets (2 triangles) and a light multiplier.
+// Each face has 6 vertex offsets (2 triangles), per-face UVs, and a light multiplier.
 interface FaceDef {
   /** 6 vertices × 3 components = 18 numbers (offsets from block origin). */
   verts: number[];
+  /** 6 vertices × 2 UV components = 12 numbers (local quad UVs). */
+  uvs: number[];
   /** Brightness multiplier to fake simple directional lighting. */
   light: number;
   /** Neighbor offset [dx, dy, dz] to check for occlusion. */
@@ -21,38 +36,44 @@ interface FaceDef {
 
 const FACES: FaceDef[] = [
   {
-    // +Y  (top)
+    // +Y  (top)  – U=X V=Z → Pattern A
     verts: [0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0],
+    uvs: UV_A,
     light: 1.0,
     neighbor: [0, 1, 0],
   },
   {
-    // -Y  (bottom)
+    // -Y  (bottom)  – U=X V=Z → Pattern B
     verts: [0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1],
+    uvs: UV_B,
     light: 0.5,
     neighbor: [0, -1, 0],
   },
   {
-    // +X  (right)
+    // +X  (right)  – U=Z V=Y → Pattern A
     verts: [1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1],
+    uvs: UV_A,
     light: 0.8,
     neighbor: [1, 0, 0],
   },
   {
-    // -X  (left)
+    // -X  (left)  – U=1-Z V=Y (mirrored) → Pattern A
     verts: [0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
+    uvs: UV_A,
     light: 0.8,
     neighbor: [-1, 0, 0],
   },
   {
-    // +Z  (front)
+    // +Z  (front)  – U=X V=Y → Pattern B
     verts: [0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1],
+    uvs: UV_B,
     light: 0.7,
     neighbor: [0, 0, 1],
   },
   {
-    // -Z  (back)
+    // -Z  (back)  – U=1-X V=Y (mirrored) → Pattern B
     verts: [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0],
+    uvs: UV_B,
     light: 0.7,
     neighbor: [0, 0, -1],
   },
@@ -60,7 +81,8 @@ const FACES: FaceDef[] = [
 
 export interface ChunkMesh {
   positions: Float32Array;
-  colors: Float32Array;
+  /** UV coords + light factor packed as vec3: [u, v, light] per vertex */
+  uvls: Float32Array;
   vertexCount: number;
 }
 
@@ -74,7 +96,7 @@ export class Chunk {
 
   // GPU handles (assigned after upload)
   posBuffer: WebGLBuffer | null = null;
-  colBuffer: WebGLBuffer | null = null;
+  uvBuffer: WebGLBuffer | null = null;
   vertexCount = 0;
 
   constructor(cx: number, cz: number) {
@@ -105,7 +127,7 @@ export class Chunk {
    */
   buildMesh(): ChunkMesh {
     const positions: number[] = [];
-    const colors: number[] = [];
+    const uvls: number[] = [];
 
     for (let y = 0; y < CHUNK_SIZE; y++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
@@ -113,24 +135,29 @@ export class Chunk {
           const block = this.getBlock(x, y, z);
           if (block === BlockType.Air) continue;
 
-          const baseColor = BlockColor[block] ?? [1, 0, 1]; // magenta fallback
+          // Fall back to stone tile indices if block type is unknown.
+          const faceTiles = BlockFaceTile[block] ?? [3, 3, 3, 3, 3, 3];
 
-          for (const face of FACES) {
+          for (let faceIdx = 0; faceIdx < FACES.length; faceIdx++) {
+            const face = FACES[faceIdx];
             const [nx, ny, nz] = face.neighbor;
             if (this.getBlock(x + nx, y + ny, z + nz) !== BlockType.Air)
               continue;
 
+            const tileU = faceTiles[faceIdx] / ATLAS_TILES;
+            const tileW = 1 / ATLAS_TILES;
+
             // Emit 6 vertices (2 triangles)
-            for (let v = 0; v < 18; v += 3) {
+            for (let v = 0; v < 6; v++) {
               positions.push(
-                x + face.verts[v],
-                y + face.verts[v + 1],
-                z + face.verts[v + 2],
+                x + face.verts[v * 3],
+                y + face.verts[v * 3 + 1],
+                z + face.verts[v * 3 + 2],
               );
-              colors.push(
-                baseColor[0] * face.light,
-                baseColor[1] * face.light,
-                baseColor[2] * face.light,
+              uvls.push(
+                tileU + face.uvs[v * 2] * tileW,
+                face.uvs[v * 2 + 1],
+                face.light,
               );
             }
           }
@@ -140,7 +167,7 @@ export class Chunk {
 
     return {
       positions: new Float32Array(positions),
-      colors: new Float32Array(colors),
+      uvls: new Float32Array(uvls),
       vertexCount: positions.length / 3,
     };
   }

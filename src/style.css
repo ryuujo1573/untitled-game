@@ -12,7 +12,7 @@ body {
   background: #000;
 }
 
-canvas {
+#webglCanvas {
   display: block;
   width: 100vw;
   height: 100vh;
@@ -55,6 +55,52 @@ canvas {
   color: rgba(255, 255, 255, 0.55);
   font-family: monospace;
   font-size: 12px;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+}
+
+/* ── F3 debug overlay ───────────────────────────────────────── */
+#debug-panel {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: none;
+  user-select: none;
+  z-index: 20;
+}
+
+#debug-text {
+  background: rgba(0, 0, 0, 0.6);
+  color: #e8e8e8;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 8px 12px;
+  border-radius: 6px;
+  white-space: pre;
+  min-width: 220px;
+}
+
+#debug-text .dbg-section {
+  color: #ffd86e;
+  font-weight: bold;
+}
+
+#debug-compass {
+  display: block;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 96px;
+  height: 96px;
+  background: transparent;
+  border-radius: 50%;
   pointer-events: none;
   user-select: none;
   z-index: 10;
