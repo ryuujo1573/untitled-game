@@ -62,7 +62,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
  * UNPACK_FLIP_Y maps canvas row-0 (image top) to UV v=1 (face top).
  */
 export async function createAtlasTexture(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
 ): Promise<WebGLTexture | null> {
   const W = T * ATLAS_TILES; // 192 px
   const canvas = document.createElement("canvas");

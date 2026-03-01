@@ -10,6 +10,9 @@ import Voxel_FRAGMENTSHADER from "./shaders/voxel/voxel_FRAGMENTSHADER.glsl?raw"
 import Outline_VERTEXSHADER from "./shaders/outline/outline_VERTEXSHADER.glsl?raw";
 import Outline_FRAGMENTSHADER from "./shaders/outline/outline_FRAGMENTSHADER.glsl?raw";
 
+import Tonemap_VERTEXSHADER from "./shaders/tonemap/tonemap_VERTEXSHADER.glsl?raw";
+import Tonemap_FRAGMENTSHADER from "./shaders/tonemap/tonemap_FRAGMENTSHADER.glsl?raw";
+
 const Unlit = {
   vertexShader: Unlit_VERTEXSHADER,
   fragmentShader: Unlit_FRAGMENTSHADER,
@@ -30,11 +33,17 @@ const Outline = {
   fragmentShader: Outline_FRAGMENTSHADER,
 };
 
+const Tonemap = {
+  vertexShader: Tonemap_VERTEXSHADER,
+  fragmentShader: Tonemap_FRAGMENTSHADER,
+};
+
 const Materials = {
   Unlit,
   Texture,
   Voxel,
   Outline,
+  Tonemap,
 };
 
 export default Materials;

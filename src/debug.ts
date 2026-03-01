@@ -101,7 +101,7 @@ export class DebugOverlay {
   private readonly sysInfo: string;
   private visible = false;
 
-  constructor(gl: WebGLRenderingContext) {
+  constructor(gl: WebGL2RenderingContext) {
     this.panel = document.getElementById("debug-panel")!;
     this.textEl = document.getElementById("debug-text")!;
     this.compass = document.getElementById(

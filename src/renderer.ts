@@ -12,12 +12,12 @@ import { Frustum } from "./frustum";
 import { createAtlasTexture } from "./atlas";
 import { raycast, RayHit } from "./raycaster";
 import { Settings } from "./settings";
-import { PauseMenu } from "./pause-menu";
+import { PauseMenu } from "./pause-menu.tsx";
 
 /**
  * Uploads a chunk's mesh to GPU buffers so it can be drawn each frame.
  */
-function uploadChunk(gl: WebGLRenderingContext, chunk: Chunk): void {
+function uploadChunk(gl: WebGL2RenderingContext, chunk: Chunk): void {
   const mesh = chunk.buildMesh();
   chunk.vertexCount = mesh.vertexCount;
 
@@ -39,7 +39,7 @@ function uploadChunk(gl: WebGLRenderingContext, chunk: Chunk): void {
  * Call this after placing or breaking a block.
  */
 function rebuildChunk(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   world: World,
   wx: number,
   _wy: number,
@@ -62,7 +62,7 @@ function rebuildChunk(
  * unit cube slightly expanded by EPS on every side.  Used each frame to
  * draw the block-selection wireframe outline.
  */
-function createWireCube(gl: WebGLRenderingContext): {
+function createWireCube(gl: WebGL2RenderingContext): {
   buf: WebGLBuffer;
   count: number;
 } {
@@ -93,7 +93,7 @@ function createWireCube(gl: WebGLRenderingContext): {
   return { buf, count: v.length / 3 }; // 24
 }
 
-async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
+async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
   // ── Render state ────────────────────────────────────────
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.enable(gl.CULL_FACE);
@@ -101,6 +101,13 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
   gl.frontFace(gl.CCW);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
+
+  // ── HDR capability detection ─────────────────────────────────
+  // EXT_color_buffer_float enables rendering to float16/float32 textures.
+  const hdrExt = gl.getExtension("EXT_color_buffer_float");
+  Settings.hdrSupported = hdrExt !== null;
+  // Clamp saved setting if the device doesn't actually support it.
+  if (!Settings.hdrSupported) Settings.hdr = false;
 
   // ── Shader ──────────────────────────────────────────────
   const program = ShaderUtilites.CreateShaderMaterial(
@@ -131,6 +138,102 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
   gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
   gl.uniform1i(uAtlas, 0);
 
+  // ── Tonemapping (HDR post-process) ───────────────────────────
+  const tonemapProgram = ShaderUtilites.CreateShaderMaterial(
+    gl,
+    Materials.Tonemap.vertexShader,
+    Materials.Tonemap.fragmentShader,
+  );
+  const aTonemapPos = tonemapProgram
+    ? gl.getAttribLocation(tonemapProgram, "a_position")
+    : -1;
+  const uHdrBuffer = tonemapProgram
+    ? gl.getUniformLocation(tonemapProgram, "u_hdrBuffer")
+    : null;
+  const uExposure = tonemapProgram
+    ? gl.getUniformLocation(tonemapProgram, "u_exposure")
+    : null;
+
+  // Full-screen quad (two triangles covering NDC [-1,1]x[-1,1]).
+  const quadBuf = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  // prettier-ignore
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1, -1,   1, -1,  -1,  1,
+    -1,  1,   1, -1,   1,  1,
+  ]), gl.STATIC_DRAW);
+
+  // HDR framebuffer state — recreated when the setting changes.
+  let hdrFbo: WebGLFramebuffer | null = null;
+  let hdrTex: WebGLTexture | null = null;
+  let hdrDepth: WebGLRenderbuffer | null = null;
+  let hdrActive = false; // tracks what's actually set up
+
+  /** Create (or re-create) the float16 HDR framebuffer. */
+  function buildHDRFbo(w: number, h: number): void {
+    if (hdrFbo) gl.deleteFramebuffer(hdrFbo);
+    if (hdrTex) gl.deleteTexture(hdrTex);
+    if (hdrDepth) gl.deleteRenderbuffer(hdrDepth);
+
+    hdrTex = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, hdrTex);
+    // RGBA16F — requires EXT_color_buffer_float in WebGL2.
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA16F,
+      w,
+      h,
+      0,
+      gl.RGBA,
+      gl.HALF_FLOAT,
+      null,
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    hdrDepth = gl.createRenderbuffer()!;
+    gl.bindRenderbuffer(gl.RENDERBUFFER, hdrDepth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+
+    hdrFbo = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, hdrFbo);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      hdrTex,
+      0,
+    );
+    gl.framebufferRenderbuffer(
+      gl.FRAMEBUFFER,
+      gl.DEPTH_ATTACHMENT,
+      gl.RENDERBUFFER,
+      hdrDepth,
+    );
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    hdrActive = true;
+  }
+
+  /** Tear down the HDR framebuffer and fall back to direct rendering. */
+  function destroyHDRFbo(): void {
+    if (hdrFbo) {
+      gl.deleteFramebuffer(hdrFbo);
+      hdrFbo = null;
+    }
+    if (hdrTex) {
+      gl.deleteTexture(hdrTex);
+      hdrTex = null;
+    }
+    if (hdrDepth) {
+      gl.deleteRenderbuffer(hdrDepth);
+      hdrDepth = null;
+    }
+    hdrActive = false;
+  }
+
   // ── Camera & input ──────────────────────────────────────
   const canvas = gl.canvas as HTMLCanvasElement;
   const camera = new Camera();
@@ -139,6 +242,7 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
 
   const physics = new Physics(camera, world);
   const pauseMenu = new PauseMenu(() => canvas.requestPointerLock());
+  pauseMenu.mount(document.getElementById("pause-root")!);
   const input = new InputManager(
     canvas,
     camera,
@@ -175,11 +279,13 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
   // Upload all chunk meshes
   world.chunks.forEach((chunk) => uploadChunk(gl, chunk));
 
-  // ── Resize handler ──────────────────────────────────────
+  // ── Resize handler ──────────────────────────────────────────────
   function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     gl.viewport(0, 0, canvas.width, canvas.height);
+    // Rebuild the HDR FBO at the new size if it's currently active.
+    if (hdrActive) buildHDRFbo(canvas.width, canvas.height);
   }
   window.addEventListener("resize", resize);
   resize();
@@ -198,6 +304,15 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
     requestAnimationFrame(frame);
     Time.CalculateTimeVariables();
     input.update();
+
+    // ── HDR FBO lifecycle ─────────────────────────────────────────────
+    // Lazily create or destroy the HDR framebuffer when the setting changes.
+    const wantHdr = Settings.hdr && Settings.hdrSupported;
+    if (wantHdr && !hdrActive) {
+      buildHDRFbo(canvas.width, canvas.height);
+    } else if (!wantHdr && hdrActive) {
+      destroyHDRFbo();
+    }
 
     // ── Day-night lighting ───────────────────────────────────────
     //   worldTime: 0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
@@ -221,14 +336,24 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
     const skyG = lerp(lerp(0.01, 0.45, twilight), 0.81, dayFactor);
     const skyB = lerp(lerp(0.1, 0.22, twilight), 0.92, dayFactor);
     // Ambient: near-black        warm golden           bright warm white
-    const ambR = lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor);
-    const ambG = lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor);
-    const ambB = lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor);
+    // In HDR mode scale ambient above 1 so the scene enters tonemapping range.
+    const hdrScale = wantHdr ? 1.6 : 1.0;
+    const ambR = lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor) * hdrScale;
+    const ambG = lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor) * hdrScale;
+    const ambB = lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor) * hdrScale;
+
+    // ── Render target: HDR FBO or default framebuffer ────────────
+    if (wantHdr && hdrFbo) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, hdrFbo);
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
 
     gl.clearColor(skyR, skyG, skyB, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(program);
-    const b = Settings.brightness;
+    // In HDR mode brightness is applied as the tonemap exposure instead.
+    const b = wantHdr ? 1.0 : Settings.brightness;
     gl.uniform3f(uAmbient, ambR * b, ambG * b, ambB * b);
     gl.uniform3f(uFogColor, skyR, skyG, skyB);
     gl.uniform1f(uFogNear, 40.0);
@@ -341,6 +466,30 @@ async function EngineRenderer(gl: WebGLRenderingContext): Promise<void> {
 
         gl.disable(gl.BLEND);
       }
+    }
+
+    // ── Tonemapping pass (HDR → SDR blit) ───────────────────────
+    if (wantHdr && hdrFbo && tonemapProgram && aTonemapPos >= 0) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+
+      gl.useProgram(tonemapProgram);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, hdrTex);
+      gl.uniform1i(uHdrBuffer, 1);
+      gl.uniform1f(uExposure, Settings.brightness);
+
+      gl.enableVertexAttribArray(aTonemapPos);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+      gl.vertexAttribPointer(aTonemapPos, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disableVertexAttribArray(aTonemapPos);
+
+      // Restore atlas texture binding on unit 0 for the next frame.
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+      gl.enable(gl.DEPTH_TEST);
     }
 
     debug.update(camera, world, {
