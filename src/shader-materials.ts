@@ -7,6 +7,9 @@ import Texture_FRAGMENTSHADER from "./shaders/texture/Texture_FRAGMENTSHADER.gls
 import Voxel_VERTEXSHADER from "./shaders/voxel/voxel_VERTEXSHADER.glsl?raw";
 import Voxel_FRAGMENTSHADER from "./shaders/voxel/voxel_FRAGMENTSHADER.glsl?raw";
 
+import Outline_VERTEXSHADER from "./shaders/outline/outline_VERTEXSHADER.glsl?raw";
+import Outline_FRAGMENTSHADER from "./shaders/outline/outline_FRAGMENTSHADER.glsl?raw";
+
 const Unlit = {
   vertexShader: Unlit_VERTEXSHADER,
   fragmentShader: Unlit_FRAGMENTSHADER,
@@ -22,10 +25,16 @@ const Voxel = {
   fragmentShader: Voxel_FRAGMENTSHADER,
 };
 
+const Outline = {
+  vertexShader: Outline_VERTEXSHADER,
+  fragmentShader: Outline_FRAGMENTSHADER,
+};
+
 const Materials = {
   Unlit,
   Texture,
   Voxel,
+  Outline,
 };
 
 export default Materials;

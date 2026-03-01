@@ -767,6 +767,88 @@ via `RenderStats`. They are displayed in thousands (`k`) for readability.
 
 ---
 
+## Step 16 — Pixel-Art Textures + Block Selection Outline
+
+### Goal
+
+Replace the noisy procedural atlas with crisp pixel-art block textures, and
+draw a wireframe selection outline around the block the player is looking at.
+
+### Texture atlas (`src/atlas.ts`)
+
+The atlas generation is extracted from `renderer.ts` into its own module and
+completely rewritten using `ImageData` for direct per-pixel control.
+
+**Layout**: unchanged — 64×16 px canvas, 4 tiles of 16×16 px.
+
+**Colour palettes** — 5 shades each, distributed by a noise value:
+
+| Tile | Material   | Key design                                                         |
+| ---- | ---------- | ------------------------------------------------------------------ |
+| 0    | Grass top  | 5 greens, n<0.07→very dark, n>0.93→highlight                       |
+| 1    | Grass side | Top 2 rows grass, rows 2–3 blended, rows 4–15 dirt                 |
+| 2    | Dirt       | 5 earthy browns, noise distribution same as above                  |
+| 3    | Stone      | Zone-based coarse gray (4×4 px zones) + fine noise + crack overlay |
+
+**Stone crack lines** — 6 named cracks (A–F), each a hand-crafted sequence of
+pixel coordinates, painted over the base gray at a darker value (82, 82, 82):
+
+```
+Crack A  (top-left diagonal):   [3,1]→[7,4]
+Crack B  (top-right diagonal):  [10,0]→[14,3]
+Crack C  (left mid):            [0,8]→[3,11]
+Crack D  (right mid):           [13,7]→[15,9]
+Crack E  (bottom-left):         [4,13]→[7,15]
+Crack F  (bottom-right):        [10,11]→[14,12]
+```
+
+**Upload**: same as before — `UNPACK_FLIP_Y_WEBGL=true`, `NEAREST` filtering.
+
+### Block-selection outline
+
+A semi-transparent wireframe cube drawn each frame around the raycast-hit block.
+
+#### Shaders (`src/shaders/outline/`)
+
+| File                          | Contents                                |
+| ----------------------------- | --------------------------------------- |
+| `outline_VERTEXSHADER.glsl`   | MVP transform only, `vec3 a_position`   |
+| `outline_FRAGMENTSHADER.glsl` | `vec4(0.0, 0.0, 0.0, 0.75)` flat colour |
+
+Registered as `Materials.Outline` in `shader-materials.ts`.
+
+#### Wire-cube geometry (`createWireCube`)
+
+12 edges × 2 vertices = **24 vertices** built as a static `gl.STATIC_DRAW`
+buffer. The cube is slightly expanded by ε = 0.002 on every side so the lines
+sit just outside the block surface:
+
+```
+lo = -0.002,  hi = 1.002
+```
+
+Edges in vertex order: 4 bottom-face edges, 4 top-face edges, 4 vertical
+edges — matching gl.LINES pair format.
+
+#### Render pass
+
+After all chunk draw calls, each frame:
+
+1. Perform DDA raycast (same as debug overlay — cheap at 6 block max distance).
+2. If no hit, skip.
+3. Translate model matrix to `(hit.bx, hit.by, hit.bz)`.
+4. Set GL state:
+   - `gl.disable(gl.CULL_FACE)` — all 12 edges visible
+   - `gl.disable(gl.DEPTH_TEST)` — always visible, won't fight block faces
+   - `gl.enable(gl.BLEND)` + `gl.blendFunc(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)`
+5. Draw 24 vertices with `gl.LINES`.
+6. Restore state (`CULL_FACE`, `DEPTH_TEST`, `BLEND` off).
+
+`gl.lineWidth(2.0)` is called as a hint; most WebGL implementations cap it at
+1 px due to DirectX/Metal backend limitations.
+
+---
+
 ## Future Steps (not implemented now)
 
 | Feature           | Notes                                                               |

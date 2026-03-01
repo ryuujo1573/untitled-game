@@ -9,75 +9,8 @@ import { World } from "./world/world";
 import { Chunk, CHUNK_SIZE } from "./world/chunk";
 import { DebugOverlay } from "./debug";
 import { Frustum } from "./frustum";
-
-/**
- * Procedurally generates a 64×16 pixel texture atlas using Canvas 2D.
- * Tile layout (each tile is 16×16 px, left to right):
- *   0 = grass_top  1 = grass_side  2 = dirt  3 = stone
- */
-function createAtlasTexture(gl: WebGLRenderingContext): WebGLTexture | null {
-  const TILE = 16;
-  const atlas = document.createElement("canvas");
-  atlas.width = TILE * 4;
-  atlas.height = TILE;
-  const ctx = atlas.getContext("2d")!;
-
-  // Deterministic per-pixel noise so tiles look the same every run.
-  function hash(x: number, y: number, seed: number): number {
-    let h = (x * 374761 + y * 1390531 + seed * 72619) | 0;
-    h = (h ^ (h >> 13)) | 0;
-    h = ((h * 1274126177) | 0) ^ (h >> 16);
-    return (h & 0xff) / 255;
-  }
-
-  function drawTile(
-    col: number,
-    base: [number, number, number],
-    dark: [number, number, number],
-    light: [number, number, number],
-    seed: number,
-  ) {
-    for (let py = 0; py < TILE; py++) {
-      for (let px = 0; px < TILE; px++) {
-        const n = hash(px, py, seed);
-        const [r, g, b] = n < 0.2 ? dark : n > 0.8 ? light : base;
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillRect(col * TILE + px, py, 1, 1);
-      }
-    }
-  }
-
-  // Tile 0: Grass top
-  drawTile(0, [90, 158, 47], [70, 128, 30], [110, 178, 60], 0);
-
-  // Tile 1: Grass side — dirt body with green top strip
-  drawTile(1, [134, 96, 60], [114, 76, 44], [154, 116, 76], 2);
-  for (let py = 0; py < 3; py++) {
-    for (let px = 0; px < TILE; px++) {
-      ctx.fillStyle =
-        hash(px, py, 99) < 0.4 ? "rgb(70,128,30)" : "rgb(90,158,47)";
-      ctx.fillRect(TILE + px, py, 1, 1);
-    }
-  }
-
-  // Tile 2: Dirt
-  drawTile(2, [134, 96, 60], [114, 76, 44], [154, 116, 76], 2);
-
-  // Tile 3: Stone
-  drawTile(3, [136, 136, 136], [116, 116, 116], [156, 156, 160], 3);
-
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  // Flip Y so canvas row 0 (top) maps to UV v=1 (world top of face).
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  return tex;
-}
+import { createAtlasTexture } from "./atlas";
+import { raycast, RayHit } from "./raycaster";
 
 /**
  * Uploads a chunk's mesh to GPU buffers so it can be drawn each frame.
@@ -120,6 +53,42 @@ function rebuildChunk(
   chunk.posBuffer = null;
   chunk.uvBuffer = null;
   uploadChunk(gl, chunk);
+}
+
+/**
+ * Builds a static GPU buffer containing the 12 edges (24 vertices) of a
+ * unit cube slightly expanded by EPS on every side.  Used each frame to
+ * draw the block-selection wireframe outline.
+ */
+function createWireCube(gl: WebGLRenderingContext): {
+  buf: WebGLBuffer;
+  count: number;
+} {
+  const e = 0.002;
+  const lo = -e,
+    hi = 1.0 + e;
+  // prettier-ignore
+  const v = new Float32Array([
+    // Bottom face (y = lo)
+    lo,lo,lo,  hi,lo,lo,
+    hi,lo,lo,  hi,lo,hi,
+    hi,lo,hi,  lo,lo,hi,
+    lo,lo,hi,  lo,lo,lo,
+    // Top face (y = hi)
+    lo,hi,lo,  hi,hi,lo,
+    hi,hi,lo,  hi,hi,hi,
+    hi,hi,hi,  lo,hi,hi,
+    lo,hi,hi,  lo,hi,lo,
+    // Vertical edges
+    lo,lo,lo,  lo,hi,lo,
+    hi,lo,lo,  hi,hi,lo,
+    hi,lo,hi,  hi,hi,hi,
+    lo,lo,hi,  lo,hi,hi,
+  ]);
+  const buf = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, v, gl.STATIC_DRAW);
+  return { buf, count: v.length / 3 }; // 24
 }
 
 function EngineRenderer(gl: WebGLRenderingContext) {
@@ -169,6 +138,29 @@ function EngineRenderer(gl: WebGLRenderingContext) {
   );
   const debug = new DebugOverlay(gl);
 
+  // ── Block-selection outline ─────────────────────────────────
+  const outlineProgram = ShaderUtilites.CreateShaderMaterial(
+    gl,
+    Materials.Outline.vertexShader,
+    Materials.Outline.fragmentShader,
+  );
+  const aOutlinePos = outlineProgram
+    ? gl.getAttribLocation(outlineProgram, "a_position")
+    : -1;
+  const uOutlineModel = outlineProgram
+    ? gl.getUniformLocation(outlineProgram, "u_modelMatrix")
+    : null;
+  const uOutlineView = outlineProgram
+    ? gl.getUniformLocation(outlineProgram, "u_viewMatrix")
+    : null;
+  const uOutlineProj = outlineProgram
+    ? gl.getUniformLocation(outlineProgram, "u_projectionMatrix")
+    : null;
+  const uOutlineAlpha = outlineProgram
+    ? gl.getUniformLocation(outlineProgram, "u_alpha")
+    : null;
+  const wireCube = createWireCube(gl);
+
   // Upload all chunk meshes
   world.chunks.forEach((chunk) => uploadChunk(gl, chunk));
 
@@ -185,6 +177,11 @@ function EngineRenderer(gl: WebGLRenderingContext) {
   const modelMatrix = mat4.create();
   const vpMatrix = mat4.create();
   const frustum = new Frustum();
+
+  // Outline fade state — persists across frames.
+  let lastOutlineHit: RayHit | null = null;
+  let outlineAlpha = 0.0;
+  const OUTLINE_FADE_SPEED = 5.0; // alpha units per second → 0.2 s fade
 
   function frame() {
     requestAnimationFrame(frame);
@@ -255,6 +252,52 @@ function EngineRenderer(gl: WebGLRenderingContext) {
       gl.drawArrays(gl.TRIANGLES, 0, chunk.vertexCount);
       drawnVerts += chunk.vertexCount;
     });
+
+    // ── Block-selection outline ──────────────────────────────
+    if (outlineProgram && aOutlinePos >= 0) {
+      const hit = raycast(camera.position, camera.getForward(), world);
+      if (hit) {
+        lastOutlineHit = hit;
+        outlineAlpha = 1.0;
+      } else {
+        // No block in range: fade out from the last known position.
+        outlineAlpha = Math.max(
+          0.0,
+          outlineAlpha - Time.deltaTime * OUTLINE_FADE_SPEED,
+        );
+      }
+
+      if (outlineAlpha > 0.0 && lastOutlineHit) {
+        mat4.identity(modelMatrix);
+        mat4.translate(modelMatrix, modelMatrix, [
+          lastOutlineHit.bx,
+          lastOutlineHit.by,
+          lastOutlineHit.bz,
+        ]);
+
+        gl.useProgram(outlineProgram);
+        gl.uniformMatrix4fv(uOutlineModel, false, modelMatrix);
+        gl.uniformMatrix4fv(uOutlineView, false, viewMatrix);
+        gl.uniformMatrix4fv(uOutlineProj, false, projMatrix);
+        gl.uniform1f(uOutlineAlpha, outlineAlpha);
+
+        // Depth test stays ON so only edges on visible faces pass.
+        // The wire cube is expanded by ε=0.002, placing lines fractionally
+        // in front of block face depth → LEQUAL passes on visible faces,
+        // fails on occluded ones.  CULL_FACE has no effect on gl.LINES.
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.enableVertexAttribArray(aOutlinePos);
+        gl.bindBuffer(gl.ARRAY_BUFFER, wireCube.buf);
+        gl.vertexAttribPointer(aOutlinePos, 3, gl.FLOAT, false, 0, 0);
+        gl.lineWidth(2.0); // capped at 1 on most WebGL backends, still a hint
+        gl.drawArrays(gl.LINES, 0, wireCube.count);
+        gl.disableVertexAttribArray(aOutlinePos);
+
+        gl.disable(gl.BLEND);
+      }
+    }
 
     debug.update(camera, world, {
       drawCalls,
