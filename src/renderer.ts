@@ -1,121 +1,126 @@
-import Time from './time-manager';
-import * as glMatrix from "gl-matrix";
-import ShaderUtilites from './renderer-utils';
-import Materials from './shader-materials';
+import Time from "./time-manager";
+import { mat4 } from "gl-matrix";
+import ShaderUtilites from "./renderer-utils";
+import Materials from "./shader-materials";
+import { Camera } from "./camera";
+import { InputManager } from "./input";
+import { World } from "./world/world";
+import { Chunk, CHUNK_SIZE } from "./world/chunk";
 
-function EngineRenderer(gl : WebGLRenderingContext)
-{
-    RenderingSettings(gl);
-    
-    Start(gl);
+/**
+ * Uploads a chunk's mesh to GPU buffers so it can be drawn each frame.
+ */
+function uploadChunk(gl: WebGLRenderingContext, chunk: Chunk): void {
+  const mesh = chunk.buildMesh();
+  chunk.vertexCount = mesh.vertexCount;
 
-    UpdateCore(gl);
+  if (chunk.vertexCount === 0) return;
+
+  // Position buffer
+  chunk.posBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, chunk.posBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+
+  // Color buffer
+  chunk.colBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, chunk.colBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, mesh.colors, gl.STATIC_DRAW);
 }
 
-function Start(gl : WebGLRenderingContext)
-{
-    //Create Shader Program
-    const shaderProgram = ShaderUtilites.CreateShaderMaterial(gl, Materials.Unlit.vertexShader, Materials.Unlit.fragmentShader);
-    if (!shaderProgram) {
-        console.error("Failed to create shader program in the start function of the renderer...");
-        return;
-    }
-    gl.useProgram(shaderProgram);
+function EngineRenderer(gl: WebGLRenderingContext) {
+  // ── Render state ────────────────────────────────────────
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  gl.clearColor(0.53, 0.81, 0.92, 1.0); // sky blue
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.frontFace(gl.CCW);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
 
-    //Create Position Buffer
-    const vertexPosBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexPosBuffer);
+  // ── Shader ──────────────────────────────────────────────
+  const program = ShaderUtilites.CreateShaderMaterial(
+    gl,
+    Materials.Voxel.vertexShader,
+    Materials.Voxel.fragmentShader,
+  );
+  if (!program) {
+    console.error("Failed to compile voxel shader");
+    return;
+  }
+  gl.useProgram(program);
 
-    //Create Vertex Array
-    const vertexPosArray = new Float32Array([
-        0.0, 0.8, 0.0,  // Top vertex
-        -0.8, -0.8, 0.0,  // Bottom-left vertex
-        0.8, -0.8, 0.0   // Bottom-right vertex
-    ]);
-    gl.bufferData(gl.ARRAY_BUFFER, vertexPosArray, gl.STATIC_DRAW);
+  const aPosition = gl.getAttribLocation(program, "a_position");
+  const aColor = gl.getAttribLocation(program, "a_color");
+  const uModel = gl.getUniformLocation(program, "u_modelMatrix");
+  const uView = gl.getUniformLocation(program, "u_viewMatrix");
+  const uProj = gl.getUniformLocation(program, "u_projectionMatrix");
 
+  // ── Camera & input ──────────────────────────────────────
+  const canvas = gl.canvas as HTMLCanvasElement;
+  const camera = new Camera();
+  const input = new InputManager(canvas, camera);
 
-    
-    //Create Color Buffer
-    const vertexColBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexColBuffer);
+  // ── World ───────────────────────────────────────────────
+  const world = new World();
+  world.generate(4); // 4×4 chunks = 64×64 blocks
 
-    //Create Vertex Colors Array
-    const vertexColArray = new Float32Array([
-        1.0, 0.0, 0.0,  // Top vertex
-        0.0, 1.0, 0.0,  // Bottom-left vertex
-        0.0, 0.0, 1.0   // Bottom-right vertex
-    ]);
-    gl.bufferData(gl.ARRAY_BUFFER, vertexColArray, gl.STATIC_DRAW);
+  // Upload all chunk meshes
+  world.chunks.forEach((chunk) => uploadChunk(gl, chunk));
 
-    // --- Set up Vertex Attribute for Positions ---
-    const positionAttributeLocation = gl.getAttribLocation(shaderProgram, "a_position");
-    gl.enableVertexAttribArray(positionAttributeLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexPosBuffer);
-    gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
-    
-    // --- Set up Vertex Attribute for Colors ---
-    const colorAttributeLocation = gl.getAttribLocation(shaderProgram, "a_color");
-    gl.enableVertexAttribArray(colorAttributeLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexColBuffer);    //I missed this and it gave me some big issues! Buffers must be binded before setting up the vertex attributes.
-    gl.vertexAttribPointer(colorAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+  // ── Resize handler ──────────────────────────────────────
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  window.addEventListener("resize", resize);
+  resize();
 
-    //Create Uniforms
-    const resolutionUniformLocation = gl.getUniformLocation(shaderProgram, "u_resolution");
-    gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+  // ── Render loop ─────────────────────────────────────────
+  const modelMatrix = mat4.create();
 
-    const colorUniformLocation = gl.getUniformLocation(shaderProgram, "u_color");
-    gl.uniform4fv(colorUniformLocation, [1.0, 0.0, 0.0, 1.0]);
+  function frame() {
+    requestAnimationFrame(frame);
+    Time.CalculateTimeVariables();
+    input.update();
 
-    //Create Model Matrix
-    let modelMatrix = glMatrix.mat4.create();
-    glMatrix.mat4.translate(modelMatrix, modelMatrix, [0.0, 0.0, 0.0]);
-
-    let modelMatrixUniformLocation = gl.getUniformLocation(shaderProgram, "u_modelMatrix");
-    gl.uniformMatrix4fv(modelMatrixUniformLocation, false, modelMatrix);
-
-    //Draw
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-}
-
-
-
-function Update(gl: WebGLRenderingContext,)
-{
-    console.log("Update Call...");
-
-}
-
-function UpdateCore(gl: WebGLRenderingContext) {
-    requestAnimationFrame(function() {
-        Time.CalculateTimeVariables();
-
-        Update(gl);
-
-        UpdateCore(gl);
-    });
-}
-
-function RenderingSettings(gl : WebGLRenderingContext)
-{
-     // Set the viewport to match the canvas size
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-    //Set Clear Color
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(program);
 
-    
-    //Enable Backface Culling
-    gl.enable(gl.CULL_FACE);
-    gl.cullFace(gl.BACK);
-    gl.frontFace(gl.CCW);
+    // Camera matrices
+    const aspect = canvas.width / canvas.height;
+    gl.uniformMatrix4fv(uView, false, camera.getViewMatrix());
+    gl.uniformMatrix4fv(uProj, false, camera.getProjectionMatrix(aspect));
 
-    //Enable Depth Testing
-    gl.enable(gl.DEPTH_TEST);
-    gl.depthFunc(gl.LEQUAL);
-    
+    // Draw each chunk
+    world.chunks.forEach((chunk) => {
+      if (chunk.vertexCount === 0 || !chunk.posBuffer || !chunk.colBuffer)
+        return;
+
+      // Model matrix = translate to chunk world position
+      mat4.identity(modelMatrix);
+      mat4.translate(modelMatrix, modelMatrix, [
+        chunk.cx * CHUNK_SIZE,
+        0,
+        chunk.cz * CHUNK_SIZE,
+      ]);
+      gl.uniformMatrix4fv(uModel, false, modelMatrix);
+
+      // Bind position attribute
+      gl.enableVertexAttribArray(aPosition);
+      gl.bindBuffer(gl.ARRAY_BUFFER, chunk.posBuffer);
+      gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+
+      // Bind color attribute
+      gl.enableVertexAttribArray(aColor);
+      gl.bindBuffer(gl.ARRAY_BUFFER, chunk.colBuffer);
+      gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+      gl.drawArrays(gl.TRIANGLES, 0, chunk.vertexCount);
+    });
+  }
+
+  frame();
 }
 
-export {
-    EngineRenderer
-}
+export { EngineRenderer };
