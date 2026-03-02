@@ -28,20 +28,52 @@ import redstoneOreUrl from "./assets/textures/block/redstone_ore.png";
 import copperOreUrl from "./assets/textures/block/copper_ore.png";
 
 // Ordered by tile index 0–11.
-const TILE_URLS = [
-  grassTopUrl, // 0
-  grassSideUrl, // 1
-  dirtUrl, // 2
-  stoneUrl, // 3
-  coalOreUrl, // 4
-  ironOreUrl, // 5
-  goldOreUrl, // 6
-  diamondOreUrl, // 7
-  emeraldOreUrl, // 8
-  lapisOreUrl, // 9
-  redstoneOreUrl, // 10
-  copperOreUrl, // 11
-];
+export const ATLAS_TILE_NAMES = [
+  "grass_block_top",
+  "grass_block_side",
+  "dirt",
+  "stone",
+  "coal_ore",
+  "iron_ore",
+  "gold_ore",
+  "diamond_ore",
+  "emerald_ore",
+  "lapis_ore",
+  "redstone_ore",
+  "copper_ore",
+] as const;
+
+export type AtlasTileName = (typeof ATLAS_TILE_NAMES)[number];
+
+const DEFAULT_ALBEDO_URLS: Record<AtlasTileName, string> = {
+  grass_block_top: grassTopUrl,
+  grass_block_side: grassSideUrl,
+  dirt: dirtUrl,
+  stone: stoneUrl,
+  coal_ore: coalOreUrl,
+  iron_ore: ironOreUrl,
+  gold_ore: goldOreUrl,
+  diamond_ore: diamondOreUrl,
+  emerald_ore: emeraldOreUrl,
+  lapis_ore: lapisOreUrl,
+  redstone_ore: redstoneOreUrl,
+  copper_ore: copperOreUrl,
+};
+
+// Kept for backwards compatibility with the legacy build path.
+const TILE_URLS = ATLAS_TILE_NAMES.map((name) => DEFAULT_ALBEDO_URLS[name]);
+
+export interface AtlasSourceManifest {
+  albedo?: Partial<Record<AtlasTileName, string>>;
+  normal?: Partial<Record<AtlasTileName, string>>;
+  specular?: Partial<Record<AtlasTileName, string>>;
+}
+
+export interface AtlasBuildStats {
+  albedoFallbacks: number;
+  normalFallbacks: number;
+  specularFallbacks: number;
+}
 
 export const ATLAS_TILES = 12;
 const T = 16; // tile size in pixels
@@ -55,17 +87,39 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-/**
- * Builds the 192×16 pixel atlas canvas (shared by WebGL and WebGPU paths).
- * Tiles are loaded from PNG assets and drawn in tile-index order.
- */
-export async function buildAtlasCanvas(): Promise<HTMLCanvasElement> {
-  const W = T * ATLAS_TILES; // 192 px
+async function loadImageSafe(url: string): Promise<HTMLImageElement | null> {
+  try {
+    return await loadImage(url);
+  } catch {
+    return null;
+  }
+}
+
+function createAtlasCanvas(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+  const W = T * ATLAS_TILES;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = T;
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = false;
+  return { canvas, ctx };
+}
+
+function drawSolidTile(
+  ctx: CanvasRenderingContext2D,
+  tileIndex: number,
+  color: string,
+): void {
+  ctx.fillStyle = color;
+  ctx.fillRect(tileIndex * T, 0, T, T);
+}
+
+/**
+ * Builds the 192×16 pixel atlas canvas (shared by WebGL and WebGPU paths).
+ * Tiles are loaded from PNG assets and drawn in tile-index order.
+ */
+export async function buildAtlasCanvas(): Promise<HTMLCanvasElement> {
+  const { canvas, ctx } = createAtlasCanvas();
   const images = await Promise.all(TILE_URLS.map(loadImage));
   for (let i = 0; i < images.length; i++) {
     ctx.drawImage(images[i], i * T, 0, T, T);
@@ -85,14 +139,10 @@ export async function buildAtlasCanvas(): Promise<HTMLCanvasElement> {
  * Used as the default normal atlas when no _n PBR textures are available.
  */
 export function buildNormalAtlasCanvas(): HTMLCanvasElement {
-  const W = T * ATLAS_TILES;
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = T;
-  const ctx = canvas.getContext("2d")!;
-  // rgba(128,128,255,255) = flat normal pointing straight out, full AO
-  ctx.fillStyle = "rgb(128,128,255)";
-  ctx.fillRect(0, 0, W, T);
+  const { canvas, ctx } = createAtlasCanvas();
+  for (let i = 0; i < ATLAS_TILES; i++) {
+    drawSolidTile(ctx, i, "rgb(128,128,255)");
+  }
   return canvas;
 }
 
@@ -108,14 +158,79 @@ export function buildNormalAtlasCanvas(): HTMLCanvasElement {
  * Used as the default specular atlas when no _s PBR textures are available.
  */
 export function buildSpecularAtlasCanvas(): HTMLCanvasElement {
-  const W = T * ATLAS_TILES;
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = T;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "rgb(0,25,0)";
-  ctx.fillRect(0, 0, W, T);
+  const { canvas, ctx } = createAtlasCanvas();
+  for (let i = 0; i < ATLAS_TILES; i++) {
+    drawSolidTile(ctx, i, "rgb(0,25,0)");
+  }
   return canvas;
+}
+
+async function buildManifestAlbedoAtlas(
+  manifest?: AtlasSourceManifest,
+): Promise<{ canvas: HTMLCanvasElement; fallbacks: number }> {
+  const { canvas, ctx } = createAtlasCanvas();
+  let fallbacks = 0;
+  const hasManifest = Boolean(manifest?.albedo);
+
+  for (let i = 0; i < ATLAS_TILE_NAMES.length; i++) {
+    const name = ATLAS_TILE_NAMES[i];
+    const overrideUrl = manifest?.albedo?.[name];
+    const defaultUrl = DEFAULT_ALBEDO_URLS[name];
+
+    let img: HTMLImageElement | null = null;
+    if (overrideUrl) {
+      img = await loadImageSafe(overrideUrl);
+      if (!img) {
+        fallbacks++;
+      }
+    } else if (hasManifest) {
+      // Manifest exists but this tile is missing in it.
+      fallbacks++;
+    }
+
+    if (!img) {
+      img = await loadImageSafe(defaultUrl);
+    }
+    if (!img) {
+      throw new Error(`Failed to load required albedo texture for tile: ${name}`);
+    }
+
+    ctx.drawImage(img, i * T, 0, T, T);
+  }
+
+  return { canvas, fallbacks };
+}
+
+async function buildManifestChannelAtlas(
+  channel: "normal" | "specular",
+  manifest?: AtlasSourceManifest,
+): Promise<{ canvas: HTMLCanvasElement; fallbacks: number }> {
+  const { canvas, ctx } = createAtlasCanvas();
+  let fallbacks = 0;
+  const hasManifest = Boolean(manifest?.[channel]);
+  const fallbackColor = channel === "normal" ? "rgb(128,128,255)" : "rgb(0,25,0)";
+
+  for (let i = 0; i < ATLAS_TILE_NAMES.length; i++) {
+    const name = ATLAS_TILE_NAMES[i];
+    const overrideUrl = manifest?.[channel]?.[name];
+    let img: HTMLImageElement | null = null;
+
+    if (overrideUrl) {
+      img = await loadImageSafe(overrideUrl);
+      if (!img) fallbacks++;
+    } else if (hasManifest) {
+      // Manifest channel exists but this tile is missing.
+      fallbacks++;
+    }
+
+    if (img) {
+      ctx.drawImage(img, i * T, 0, T, T);
+    } else {
+      drawSolidTile(ctx, i, fallbackColor);
+    }
+  }
+
+  return { canvas, fallbacks };
 }
 
 /**
@@ -127,9 +242,41 @@ export async function buildAllAtlases(): Promise<{
   albedo:   HTMLCanvasElement;
   normal:   HTMLCanvasElement;
   specular: HTMLCanvasElement;
+  stats: AtlasBuildStats;
 }> {
   const albedo = await buildAtlasCanvas();
-  return { albedo, normal: buildNormalAtlasCanvas(), specular: buildSpecularAtlasCanvas() };
+  return {
+    albedo,
+    normal: buildNormalAtlasCanvas(),
+    specular: buildSpecularAtlasCanvas(),
+    stats: { albedoFallbacks: 0, normalFallbacks: 0, specularFallbacks: 0 },
+  };
+}
+
+export async function buildAllAtlasesFromManifest(
+  manifest?: AtlasSourceManifest,
+): Promise<{
+  albedo: HTMLCanvasElement;
+  normal: HTMLCanvasElement;
+  specular: HTMLCanvasElement;
+  stats: AtlasBuildStats;
+}> {
+  const [albedoRes, normalRes, specularRes] = await Promise.all([
+    buildManifestAlbedoAtlas(manifest),
+    buildManifestChannelAtlas("normal", manifest),
+    buildManifestChannelAtlas("specular", manifest),
+  ]);
+
+  return {
+    albedo: albedoRes.canvas,
+    normal: normalRes.canvas,
+    specular: specularRes.canvas,
+    stats: {
+      albedoFallbacks: albedoRes.fallbacks,
+      normalFallbacks: normalRes.fallbacks,
+      specularFallbacks: specularRes.fallbacks,
+    },
+  };
 }
 
 /**

@@ -26,6 +26,8 @@ import { Chunk, CHUNK_SIZE } from "../world/chunk";
 import { DebugOverlay } from "../debug";
 import { Frustum } from "../frustum";
 import { buildAllAtlases } from "../atlas";
+import { buildAllAtlasesFromManifest } from "../atlas";
+import { ResourcePackManager } from "../resource-pack";
 import { raycast, type RayHit } from "../raycaster";
 import { Settings } from "../settings";
 import { PauseMenu } from "../pause-menu.tsx";
@@ -275,8 +277,34 @@ export class WebGPURenderer implements IRenderer {
     });
 
     // ── 6. Atlas textures (albedo, normal _n, specular _s) ───────────────
-    const { albedo: albedoCanvas, normal: normalCanvas, specular: specularCanvas }
-      = await buildAllAtlases();
+    // Resource-pack override path:
+    //   window.__PBR_TEXTURE_MANIFEST__ = { albedo, normal, specular }
+    // or
+    //   window.__PBR_PACK_BASE_URL = "/path/to/textures/block"
+    const resourcePacks = new ResourcePackManager();
+    if (typeof window !== "undefined") {
+      resourcePacks.loadFromWindow(window);
+    }
+
+    const atlasBundle = resourcePacks.getAtlasManifest()
+      ? await buildAllAtlasesFromManifest(resourcePacks.getAtlasManifest())
+      : await buildAllAtlases();
+
+    const {
+      albedo: albedoCanvas,
+      normal: normalCanvas,
+      specular: specularCanvas,
+      stats: atlasStats,
+    } = atlasBundle;
+
+    if (atlasStats.albedoFallbacks + atlasStats.normalFallbacks + atlasStats.specularFallbacks > 0) {
+      console.info(
+        "[PBR Atlas] fallback tiles",
+        `albedo=${atlasStats.albedoFallbacks}`,
+        `normal=${atlasStats.normalFallbacks}`,
+        `specular=${atlasStats.specularFallbacks}`,
+      );
+    }
 
     const uploadAtlas = (canvas: HTMLCanvasElement, label: string): GPUTexture => {
       const tex = device.createTexture({

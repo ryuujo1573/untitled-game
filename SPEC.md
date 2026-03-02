@@ -979,6 +979,154 @@ This UBO is shared across GBuffer, deferred, and outline passes.
 
 ---
 
+## Step 19 — Resource Pack PBR Ingestion (labPBR `_n` / `_s`)
+
+### Goal
+
+Load real PBR material textures from resource packs instead of relying on
+generated fallback normal/specular atlases.
+
+### Scope
+
+1. Add a texture resolver that maps each block tile name to:
+  - albedo: `name.png`
+  - normal: `name_n.png`
+  - specular: `name_s.png`
+2. Build atlases from the resolved texture set with fallback chain:
+  - pack texture → base project texture → generated default.
+3. Support hot-reload / runtime pack swap by rebuilding GPU textures and bind
+  groups without restarting the renderer.
+
+### Implementation status (started)
+
+Implemented in this phase:
+
+- `src/resource-pack.ts` introduces `ResourcePackManager`.
+- `src/atlas.ts` now supports manifest-based atlas builds via
+  `buildAllAtlasesFromManifest(manifest)`.
+- Fallback counters are emitted during renderer startup:
+  `albedoFallbacks`, `normalFallbacks`, `specularFallbacks`.
+- `src/webgpu/renderer.ts` consumes optional runtime globals:
+
+```ts
+window.__PBR_TEXTURE_MANIFEST__ = {
+  albedo:   { grass_block_top: "/packs/a/grass_block_top.png" },
+  normal:   { grass_block_top: "/packs/a/grass_block_top_n.png" },
+  specular: { grass_block_top: "/packs/a/grass_block_top_s.png" },
+};
+// or
+window.__PBR_PACK_BASE_URL = "/packs/a/textures/block";
+```
+
+Not implemented yet:
+
+- UI-driven pack selection / upload flow.
+- Live in-session atlas swap and bind-group rebuild without restart.
+
+### Deliverables
+
+- `ResourcePackManager` module with async index + load APIs.
+- Atlas build path updated to accept an explicit texture manifest.
+- Debug panel section showing active pack name and missing-PBR fallback counts.
+
+### Exit criteria
+
+- A block with valid `_n` and `_s` in the pack visibly changes roughness and
+  normal response in scene lighting.
+- Missing maps fall back per-tile without rendering errors.
+
+---
+
+## Step 20 — Shadow Mapping for Deferred Lighting
+
+### Goal
+
+Add directional shadowing (sun/moon) to the deferred PBR path.
+
+### Scope
+
+1. Add a shadow depth pass (terrain-only first).
+2. Extend frame uniforms with shadow view/projection matrices and light-space
+  transform.
+3. Sample shadow map in deferred pass with depth comparison and bias.
+4. Add optional 2×2 PCF filtering toggle.
+
+### Deliverables
+
+- `shadow_terrain.wgsl` depth-only pipeline.
+- Deferred shader update with shadow factor multiplication on direct light.
+- Settings toggle: `Shadows` + `Shadow Quality (off/basic/pcf)`.
+
+### Exit criteria
+
+- Terrain self-shadowing tracks sun direction across day cycle.
+- No major acne/peter-panning at default bias settings.
+
+---
+
+## Step 21 — Iris Compatibility Layer (Phase 1)
+
+### Goal
+
+Execute a constrained subset of Iris shaderpack programs using the existing
+WebGPU render graph.
+
+### Scope (Phase 1 subset)
+
+- `gbuffers_terrain`
+- `deferred`
+- `composite`
+- `final`
+
+### Contract source of truth
+
+Implementation follows the interfaces defined in `SHADER.md`:
+
+- uniform naming and packing
+- sampler/colortex binding layout
+- supported preprocessor macros
+- pass ordering and fallback rules
+
+### Deliverables
+
+- Shaderpack parser (`.vsh` / `.fsh` + `shaders.properties`).
+- GLSL preprocessing + macro injection.
+- GLSL→WGSL transpile/compile stage with diagnostics surfaced in debug UI.
+- Program fallback logic to built-in shaders when pack stage is missing.
+
+### Exit criteria
+
+- A minimal Iris-targeted pack can run terrain + one deferred/composite stage.
+- Missing programs degrade gracefully without crashing frame execution.
+
+---
+
+## Step 22 — Validation Matrix & Compatibility Gates
+
+### Goal
+
+Prevent regressions while expanding PBR/shaderpack support.
+
+### Test matrix
+
+- Backends: WebGPU primary, WebGL2 fallback
+- Packs: no-pack defaults, partial PBR pack, full PBR pack
+- Features: HDR on/off, shadows on/off, tonemap exposure range
+
+### Required checks per release
+
+1. `bun run build` succeeds.
+2. TypeScript check is clean.
+3. GPU shader compile log has no errors.
+4. Golden-scene screenshot diff is within tolerance.
+
+### Exit criteria
+
+- All matrix combinations render and remain interactive.
+- Known unsupported Iris stages are explicitly reported, not silently broken.
+
+---
+
 ## Future Steps (not implemented now)
 
 | Feature           | Notes                                                               |
