@@ -774,6 +774,10 @@ via `RenderStats`. They are displayed in thousands (`k`) for readability.
 Replace the noisy procedural atlas with crisp pixel-art block textures, and
 draw a wireframe selection outline around the block the player is looking at.
 
+> **Historical note:** This step documents the WebGL-era 4-tile atlas setup.
+> The current WebGPU/PBR pipeline uses a 12-tile multi-atlas material system
+> (albedo + normal + specular), documented in **Step 18**.
+
 ### Texture atlas (`src/atlas.ts`)
 
 The atlas generation is extracted from `renderer.ts` into its own module and
@@ -846,6 +850,132 @@ After all chunk draw calls, each frame:
 
 `gl.lineWidth(2.0)` is called as a hint; most WebGL implementations cap it at
 1 px due to DirectX/Metal backend limitations.
+
+---
+
+## Step 17 — WebGPU Backend + Runtime Fallback
+
+### Goal
+
+Add a first-class WebGPU renderer while preserving the existing WebGL2 path
+as an automatic fallback.
+
+### Runtime selection (`src/main.ts`)
+
+Startup now attempts backends in this order:
+
+1. If `navigator.gpu` is available, construct `WebGPURenderer` and call `start()`.
+2. If WebGPU init fails (or API is unavailable), fall back to `initializeCanvas()`
+  and the legacy `EngineRenderer` (WebGL2).
+
+This keeps browser compatibility while allowing modern GPU features where
+supported.
+
+### New backend structure
+
+The WebGPU path is implemented in `src/webgpu/renderer.ts` with shader modules
+under `src/webgpu/shaders/`.
+
+Core additions:
+
+- `src/renderer-interface.ts` — common `IRenderer` abstraction.
+- `src/webgpu/shaders/outline.wgsl` — wireframe selection cube.
+- `src/webgpu/shaders/tonemap.wgsl` — fullscreen ACES tonemap pass.
+
+### Camera projection update
+
+`Camera` now exposes `getProjectionMatrixZO(aspect)` using
+`mat4.perspectiveZO(...)` for WebGPU clip-space depth (`z ∈ [0, 1]`).
+
+The WebGPU renderer uses this ZO projection for GPU uniforms and depth
+reconstruction while keeping existing camera behavior unchanged.
+
+---
+
+## Step 18 — Deferred PBR Pipeline (labPBR-style defaults)
+
+### Goal
+
+Replace forward voxel shading in the WebGPU backend with a deferred lighting
+pipeline that supports normal/specular material channels and physically based
+lighting terms.
+
+### Render pipeline (WebGPU)
+
+Per-frame pass order:
+
+1. **GBuffer pass** (`gbuffers_terrain.wgsl`) — writes 3 MRT targets + depth.
+2. **Deferred lighting pass** (`deferred_lighting.wgsl`) — evaluates
+  Cook-Torrance BRDF from GBuffer.
+3. **Outline pass** (`outline.wgsl`) — block-selection wireframe over lit scene.
+4. **Tonemap pass** (`tonemap.wgsl`) — HDR to swapchain when HDR is enabled.
+
+### GBuffer outputs
+
+`gbuffers_terrain.wgsl` writes:
+
+- `colortex0` (`rgba8unorm`): `rgb = albedo`, `a = roughness`
+- `colortex1` (`rgba16float`): `rgb = view normal (encoded 0..1)`, `a = F0`
+- `colortex2` (`rgba8unorm`): `rgb = emissive`, `a = AO`
+- `depth24plus`: scene depth for deferred reconstruction and outline occlusion
+
+### Material atlas system
+
+Atlas provisioning now supports three channels:
+
+- Dimensions: **192×16** (12 tiles × 16 px)
+
+- **Albedo atlas** — texture images loaded from block assets.
+- **Normal atlas** — generated default flat map (`128,128,255,255`).
+- **Specular atlas** — generated default map (`0,25,0,255`).
+
+Implemented in `src/atlas.ts` via:
+
+- `buildAtlasCanvas()`
+- `buildNormalAtlasCanvas()`
+- `buildSpecularAtlasCanvas()`
+- `buildAllAtlases()`
+
+### Chunk mesh vertex format extension
+
+`ChunkMesh` now contains four streams:
+
+- `positions` (`vec3`)
+- `uvls` (`vec4`: localU, localV, tileIndex, bakedLight)
+- `normals` (`vec3`)
+- `tangents` (`vec4`: tangent.xyz + bitangentSign)
+
+`src/world/chunk.ts` now emits per-face TBN basis data (`FACE_TBN`) so normal
+maps can be transformed correctly in the GBuffer shader.
+
+### Deferred lighting model
+
+`deferred_lighting.wgsl` computes:
+
+- GGX normal distribution
+- Smith-Schlick geometry term
+- Fresnel-Schlick reflectance
+- Lambertian diffuse (suppressed for metallic materials)
+- Ambient + fog blending
+
+Depth reconstruction uses `projInv` from the frame UBO (ZO projection path).
+
+### Frame UBO expansion
+
+WebGPU frame uniforms were expanded to carry deferred inputs:
+
+- `view`, `projection`, `viewInv`, `projInv`
+- `sunDirStrength`, `sunColor`
+- `ambientColor`
+- `fogColorNear`, `fogFar`
+
+This UBO is shared across GBuffer, deferred, and outline passes.
+
+### Notes
+
+- Current PBR behavior uses generated defaults for `_n`/`_s` when pack-specific
+  textures are not provided yet.
+- Shadow mapping is not part of this step and remains future work.
 
 ---
 

@@ -32,6 +32,23 @@ interface SliceDef {
   light: number;
 }
 
+// ── Per-face tangent basis ─────────────────────────────────────
+//
+// Each row: [nx, ny, nz,  tx, ty, tz,  bitangentSign]
+// where bitangent B = bitangentSign * cross(N, T).
+//
+// Derived from the exact corner winding used below for each face case so
+// that TBN correctly maps the atlas _n texture to world/view space.  
+// Face order follows BlockFaceTile: [+Y, -Y, +X, -X, +Z, -Z].
+const FACE_TBN: ReadonlyArray<readonly [number,number,number, number,number,number, number]> = [
+  [ 0, 1, 0,   1,  0,  0, -1], // 0: +Y
+  [ 0,-1, 0,   1,  0,  0,  1], // 1: -Y
+  [ 1, 0, 0,   0,  0,  1, -1], // 2: +X
+  [-1, 0, 0,   0,  0, -1, -1], // 3: -X
+  [ 0, 0, 1,   1,  0,  0,  1], // 4: +Z
+  [ 0, 0,-1,  -1,  0,  0,  1], // 5: -Z
+] as const;
+
 const SLICES: SliceDef[] = [
   {
     faceIndex: 0,
@@ -96,7 +113,15 @@ export interface ChunkMesh {
    * localU/V span 0 → (quad width/height) so the vertex shader can tile
    * the atlas sprite across the entire merged quad using fract().
    */
-  uvls: Float32Array;
+  uvls:     Float32Array;
+  /** vec3 per vertex – object-space face normal (one of the 6 axis directions). */
+  normals:  Float32Array;
+  /**
+   * vec4 per vertex – tangent frame for normal mapping.
+   *   xyz = object-space tangent direction (aligned with atlas U axis)
+   *   w   = bitangent sign: B = w * cross(N, T)
+   */
+  tangents: Float32Array;
   vertexCount: number;
 }
 
@@ -146,7 +171,9 @@ export class Chunk {
    */
   buildMesh(): ChunkMesh {
     const positions: number[] = [];
-    const uvls: number[] = []; // 4 components per vertex: [localU, localV, tileIndex, light]
+    const uvls:      number[] = []; // 4 components per vertex: [localU, localV, tileIndex, light]
+    const normals:   number[] = []; // 3 components per vertex
+    const tangents:  number[] = []; // 4 components per vertex (xyz + bitangent sign)
 
     // Reusable scratch arrays — allocated once to avoid per-slice GC pressure.
     const mask = new Int16Array(N * N); // tile index 0–3, or -1 = not visible
@@ -283,10 +310,13 @@ export class Chunk {
             }
 
             // Two triangles: (0,1,2) and (0,2,3).
+            const tbn = FACE_TBN[faceIndex];
             for (const vi of [0, 1, 2, 0, 2, 3]) {
               const [pos, uv] = corners[vi];
               positions.push(pos[0], pos[1], pos[2]);
               uvls.push(uv[0], uv[1], tileIdx, light);
+              normals.push(tbn[0], tbn[1], tbn[2]);
+              tangents.push(tbn[3], tbn[4], tbn[5], tbn[6]);
             }
           }
         }
@@ -295,7 +325,9 @@ export class Chunk {
 
     return {
       positions: new Float32Array(positions),
-      uvls: new Float32Array(uvls),
+      uvls:      new Float32Array(uvls),
+      normals:   new Float32Array(normals),
+      tangents:  new Float32Array(tangents),
       vertexCount: positions.length / 3,
     };
   }

@@ -68,4 +68,15 @@ export class Camera {
     mat4.perspective(proj, (70 * Math.PI) / 180, aspect, 0.1, 500.0);
     return proj;
   }
+
+  /**
+   * Same field-of-view as getProjectionMatrix() but uses the zero-to-one
+   * depth range expected by WebGPU (clip z ∈ [0, 1] rather than [-1, 1]).
+   * Use this matrix when uploading to the WebGPU renderer's UBOs.
+   */
+  getProjectionMatrixZO(aspect: number): mat4 {
+    const proj = mat4.create();
+    mat4.perspectiveZO(proj, (70 * Math.PI) / 180, aspect, 0.1, 500.0);
+    return proj;
+  }
 }

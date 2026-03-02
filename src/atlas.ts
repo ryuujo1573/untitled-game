@@ -74,6 +74,65 @@ export async function buildAtlasCanvas(): Promise<HTMLCanvasElement> {
 }
 
 /**
+ * Builds a 192×16 flat-normal atlas: every pixel = (128, 128, 255, 255).
+ *
+ * Encodes the labPBR _n convention:
+ *   R=128 → tangent-space X = 0  (no horizontal slope)
+ *   G=128 → tangent-space Y = 0  (no horizontal slope)
+ *   B=255 → AO = 1.0             (fully unoccluded)
+ *   A=255 → height = 1.0         (max parallax)
+ *
+ * Used as the default normal atlas when no _n PBR textures are available.
+ */
+export function buildNormalAtlasCanvas(): HTMLCanvasElement {
+  const W = T * ATLAS_TILES;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = T;
+  const ctx = canvas.getContext("2d")!;
+  // rgba(128,128,255,255) = flat normal pointing straight out, full AO
+  ctx.fillStyle = "rgb(128,128,255)";
+  ctx.fillRect(0, 0, W, T);
+  return canvas;
+}
+
+/**
+ * Builds a 192×16 default-specular atlas: every pixel = (0, 25, 0, 255).
+ *
+ * Encodes the labPBR _s convention:
+ *   R=0   → smoothness = 0    (fully rough, no specular highlights)
+ *   G=25  → F0 ≈ 10 %         (dielectric, maps to ~0.04 base reflectance)
+ *   B=0   → porosity/SSS = 0
+ *   A=0   → emissive = 0
+ *
+ * Used as the default specular atlas when no _s PBR textures are available.
+ */
+export function buildSpecularAtlasCanvas(): HTMLCanvasElement {
+  const W = T * ATLAS_TILES;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = T;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "rgb(0,25,0)";
+  ctx.fillRect(0, 0, W, T);
+  return canvas;
+}
+
+/**
+ * Builds all three atlas canvases (albedo, normal, specular) concurrently.
+ * The albedo atlas loads PNG assets asynchronously; the normal and specular
+ * atlases are generated programmatically and resolve synchronously.
+ */
+export async function buildAllAtlases(): Promise<{
+  albedo:   HTMLCanvasElement;
+  normal:   HTMLCanvasElement;
+  specular: HTMLCanvasElement;
+}> {
+  const albedo = await buildAtlasCanvas();
+  return { albedo, normal: buildNormalAtlasCanvas(), specular: buildSpecularAtlasCanvas() };
+}
+
+/**
  * Builds and uploads a 192×16 texture atlas asynchronously.
  * All 12 PNG tiles are fetched in parallel and drawn onto a canvas strip.
  *
