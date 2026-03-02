@@ -56,6 +56,24 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
+ * Builds the 192×16 pixel atlas canvas (shared by WebGL and WebGPU paths).
+ * Tiles are loaded from PNG assets and drawn in tile-index order.
+ */
+export async function buildAtlasCanvas(): Promise<HTMLCanvasElement> {
+  const W = T * ATLAS_TILES; // 192 px
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = T;
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  const images = await Promise.all(TILE_URLS.map(loadImage));
+  for (let i = 0; i < images.length; i++) {
+    ctx.drawImage(images[i], i * T, 0, T, T);
+  }
+  return canvas;
+}
+
+/**
  * Builds and uploads a 192×16 texture atlas asynchronously.
  * All 12 PNG tiles are fetched in parallel and drawn onto a canvas strip.
  *
@@ -64,18 +82,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 export async function createAtlasTexture(
   gl: WebGL2RenderingContext,
 ): Promise<WebGLTexture | null> {
-  const W = T * ATLAS_TILES; // 192 px
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = T;
-  const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = false;
-
-  // Load all 12 tiles in parallel, then stamp each at its column.
-  const images = await Promise.all(TILE_URLS.map(loadImage));
-  for (let i = 0; i < images.length; i++) {
-    ctx.drawImage(images[i], i * T, 0, T, T);
-  }
+  const canvas = await buildAtlasCanvas();
 
   // ── Upload to WebGL ──────────────────────────────────────────
   const tex = gl.createTexture();

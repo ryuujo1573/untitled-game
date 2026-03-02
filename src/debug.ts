@@ -101,7 +101,7 @@ export class DebugOverlay {
   private readonly sysInfo: string;
   private visible = false;
 
-  constructor(gl: WebGL2RenderingContext) {
+  constructor(gl: WebGL2RenderingContext | null) {
     this.panel = document.getElementById("debug-panel")!;
     this.textEl = document.getElementById("debug-text")!;
     this.compass = document.getElementById(
@@ -111,17 +111,20 @@ export class DebugOverlay {
     this.ctx = this.compass.getContext("2d")!;
 
     // ── One-time system / environment snapshot ──────────────────
-    const dbgExt = gl.getExtension("WEBGL_debug_renderer_info");
+    // gl may be null when running on the WebGPU backend.
+    const dbgExt = gl?.getExtension("WEBGL_debug_renderer_info") ?? null;
     const gpuRenderer = dbgExt
-      ? (gl.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL) as string)
-      : "—";
+      ? (gl!.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL) as string)
+      : (navigator as unknown as { gpu?: { wgslLanguageFeatures?: unknown } }).gpu
+        ? "WebGPU"
+        : "—";
     const gpuVendor = dbgExt
-      ? (gl.getParameter(dbgExt.UNMASKED_VENDOR_WEBGL) as string)
+      ? (gl!.getParameter(dbgExt.UNMASKED_VENDOR_WEBGL) as string)
       : "—";
-    const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
-    const maxViewport = (
-      gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array
-    ).join("×");
+    const maxTex      = gl ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) : 0;
+    const maxViewport = gl
+      ? (gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array).join("×")
+      : "—";
 
     const cpuCores = navigator.hardwareConcurrency ?? "—";
     const ramGB =
