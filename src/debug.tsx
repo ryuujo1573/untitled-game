@@ -1,16 +1,17 @@
-import { Camera } from "./camera";
-import { World } from "./world/world";
-import { BlockType } from "./world/block";
-import { raycast } from "./raycaster";
-import Time from "./time-manager";
+import { Camera } from "~/camera";
+import { World } from "~/world/world";
+import { BlockType } from "~/world/block";
+import { raycast } from "~/raycaster";
+import Time from "~/time-manager";
 import { render } from "solid-js/web";
-import { createSignal, createMemo, Show, For } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import {
   IconBrandChrome,
   IconBrandSafari,
   IconBrandFirefox,
 } from "@tabler/icons-solidjs";
 import type { Component } from "solid-js";
+import { getShaderpackStateSnapshot } from "~/shaderpack/runtime";
 
 export interface RenderStats {
   drawCalls: number;
@@ -130,6 +131,14 @@ interface DebugState {
     engine: BrowserEngine;
     isTauri: boolean;
   };
+  shaderpack: {
+    active: string;
+    warnings: number;
+    errors: number;
+    overrides: number;
+    totalStages: number;
+    latestFallback: string;
+  };
 }
 
 const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
@@ -238,6 +247,23 @@ const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
           <dd>{props.state.sysInfo.platform}</dd>
           <dt>Tauri</dt>
           <dd>{import.meta.isTauri ? "Yes" : "No"} {JSON.stringify(import.meta.isTauri)}</dd>
+
+          {/* Shaderpack Section */}
+          <header class="col-span-2 text-[#aaa] font-bold mt-3 mb-0.5 border-t border-white/10 pt-1.5">
+            Shaderpack
+          </header>
+          <dt>Active</dt>
+          <dd class="break-all">{props.state.shaderpack.active}</dd>
+          <dt>Stages</dt>
+          <dd>
+            {props.state.shaderpack.overrides}/{props.state.shaderpack.totalStages} override
+          </dd>
+          <dt>Diag</dt>
+          <dd>
+            {props.state.shaderpack.warnings} warnings, {props.state.shaderpack.errors} errors
+          </dd>
+          <dt>Fallback</dt>
+          <dd class="break-all">{props.state.shaderpack.latestFallback || "—"}</dd>
         </dl>
       </aside>
     </Show>
@@ -331,6 +357,14 @@ export class DebugOverlay {
         platform: "—",
         engine: "unknown",
         isTauri: false,
+      },
+      shaderpack: {
+        active: "None",
+        warnings: 0,
+        errors: 0,
+        overrides: 0,
+        totalStages: 0,
+        latestFallback: "",
       },
     });
 
@@ -448,6 +482,12 @@ export class DebugOverlay {
       };
     }
 
+    const shaderpack = getShaderpackStateSnapshot();
+    const overrides = shaderpack.stageStatuses.filter((s) => s.mode === "override").length;
+    const latestFallback = [...shaderpack.stageStatuses]
+      .reverse()
+      .find((s) => s.mode === "builtin" && s.reason)?.reason ?? "";
+
     this.setState({
       ...this.state(),
       fps: Number(Time.GetFPS().toFixed(0)),
@@ -464,6 +504,14 @@ export class DebugOverlay {
         pitch: (pitch * 180) / Math.PI,
       },
       target,
+      shaderpack: {
+        active: shaderpack.active?.name ?? "None",
+        warnings: shaderpack.diagnostics.warnings.length,
+        errors: shaderpack.diagnostics.errors.length,
+        overrides,
+        totalStages: shaderpack.stageStatuses.length,
+        latestFallback,
+      },
     });
 
     // ── Draw 3-D compass ───────────────────────────────────────

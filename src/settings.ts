@@ -18,6 +18,10 @@ export const Settings = {
    *  True when EXT_color_buffer_float is available in WebGL2. */
   hdrSupported: false,
 
+  /** Absolute path to the local shaderpack library directory (Tauri-only).
+   *  null means no library has been configured. */
+  shaderpackLibraryPath: null as string | null,
+
   /** Load persisted values from localStorage, if present. */
   load(): void {
     const raw = localStorage.getItem("voxer_settings");
@@ -27,6 +31,8 @@ export const Settings = {
       if (typeof obj.brightness === "number")
         this.brightness = Math.max(0, Math.min(2, obj.brightness));
       if (typeof obj.hdr === "boolean") this.hdr = obj.hdr;
+      if (typeof obj.shaderpackLibraryPath === "string")
+        this.shaderpackLibraryPath = obj.shaderpackLibraryPath;
     } catch {
       // Ignore corrupt data.
     }
@@ -35,7 +41,11 @@ export const Settings = {
   save(): void {
     localStorage.setItem(
       "voxer_settings",
-      JSON.stringify({ brightness: this.brightness, hdr: this.hdr }),
+      JSON.stringify({
+        brightness: this.brightness,
+        hdr: this.hdr,
+        shaderpackLibraryPath: this.shaderpackLibraryPath,
+      }),
     );
   },
 };

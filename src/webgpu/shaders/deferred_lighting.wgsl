@@ -14,6 +14,8 @@
 //   2 — colortex1  (normalMetallic,  rgba16float → texture_2d<f32>)
 //   3 — colortex2  (emissiveAO,      rgba8unorm  → texture_2d<f32>)
 //   4 — depthTex   (texture_depth_2d)
+//   5 — skyboxTex  (rgba8unorm equirect sky texture)
+//   6 — skyboxSamp (linear sampler)
 //
 // All GBuffer reads use textureLoad (integer screen-space coords) so
 // no sampler binding is required in this pass.
@@ -36,6 +38,8 @@ struct GFrameUniforms {
 @group(0) @binding(2) var          gbuf1:    texture_2d<f32>;   // normalMetallic
 @group(0) @binding(3) var          gbuf2:    texture_2d<f32>;   // emissiveAO
 @group(0) @binding(4) var          depthTex: texture_depth_2d;
+@group(0) @binding(5) var          skyboxTex: texture_2d<f32>;
+@group(0) @binding(6) var          skyboxSamp: sampler;
 
 // ---- Fullscreen-triangle vertex -------------------------------------------
 
@@ -56,6 +60,7 @@ struct VsOut {
 // ---- Cook-Torrance BRDF helpers -------------------------------------------
 
 const PI: f32 = 3.14159265358979;
+const TWO_PI: f32 = 6.28318530717959;
 
 fn distributionGGX(nDotH: f32, roughness: f32) -> f32 {
     let a  = roughness * roughness;
@@ -99,7 +104,15 @@ fn fresnelSchlick(cosTheta: f32, f0: f32) -> f32 {
 
     // Sky pixels have depth ~1 — no geometry was rasterised here.
     if (depth >= 0.9999) {
-        return vec4f(frame.fogColorNear.rgb, 1.0);
+        let clipFar = vec4f(ndcXY, 1.0, 1.0);
+        let vRay4   = frame.projInv * clipFar;
+        let vRay    = normalize(vRay4.xyz / max(vRay4.w, 0.0001));
+        let wRay    = normalize((frame.viewInv * vec4f(vRay, 0.0)).xyz);
+
+        let skyU = atan2(wRay.z, wRay.x) / TWO_PI + 0.5;
+        let skyV = acos(clamp(wRay.y, -1.0, 1.0)) / PI;
+        let sky  = textureSample(skyboxTex, skyboxSamp, vec2f(fract(skyU), clamp(skyV, 0.0, 1.0)));
+        return vec4f(sky.rgb, 1.0);
     }
 
     let L     = normalize(frame.sunDirStrength.xyz);

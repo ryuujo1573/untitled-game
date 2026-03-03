@@ -26,6 +26,8 @@ export function createManifestFromBaseUrl(baseUrl: string): AtlasSourceManifest 
 
 export class ResourcePackManager {
   private atlasManifest?: AtlasSourceManifest;
+  private cloudTextureUrl?: string;
+  private skyboxTextureUrl?: string;
 
   setAtlasManifest(manifest?: AtlasSourceManifest): void {
     this.atlasManifest = manifest;
@@ -33,6 +35,22 @@ export class ResourcePackManager {
 
   getAtlasManifest(): AtlasSourceManifest | undefined {
     return this.atlasManifest;
+  }
+
+  setCloudTextureUrl(url?: string): void {
+    this.cloudTextureUrl = url;
+  }
+
+  getCloudTextureUrl(): string | undefined {
+    return this.cloudTextureUrl;
+  }
+
+  setSkyboxTextureUrl(url?: string): void {
+    this.skyboxTextureUrl = url;
+  }
+
+  getSkyboxTextureUrl(): string | undefined {
+    return this.skyboxTextureUrl;
   }
 
   setAtlasBaseUrl(baseUrl: string): void {
@@ -48,6 +66,8 @@ export class ResourcePackManager {
     const w = win as Window & {
       __PBR_TEXTURE_MANIFEST__?: AtlasSourceManifest;
       __PBR_PACK_BASE_URL?: string;
+      __CLOUD_TEXTURE_URL?: string;
+      __SKYBOX_TEXTURE_URL?: string;
     };
 
     if (w.__PBR_TEXTURE_MANIFEST__) {
@@ -56,6 +76,12 @@ export class ResourcePackManager {
     }
     if (typeof w.__PBR_PACK_BASE_URL === "string" && w.__PBR_PACK_BASE_URL.trim().length > 0) {
       this.setAtlasBaseUrl(w.__PBR_PACK_BASE_URL.trim());
+    }
+    if (typeof w.__CLOUD_TEXTURE_URL === "string" && w.__CLOUD_TEXTURE_URL.trim().length > 0) {
+      this.setCloudTextureUrl(w.__CLOUD_TEXTURE_URL.trim());
+    }
+    if (typeof w.__SKYBOX_TEXTURE_URL === "string" && w.__SKYBOX_TEXTURE_URL.trim().length > 0) {
+      this.setSkyboxTextureUrl(w.__SKYBOX_TEXTURE_URL.trim());
     }
   }
 }

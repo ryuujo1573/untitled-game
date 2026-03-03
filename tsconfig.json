@@ -17,6 +17,12 @@
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
 
+    "paths": {
+      "~/*": ["./src/*"],
+      "@test/*": ["./tests/*"],
+      "@tauri/*": ["./src-tauri/*"]
+    },
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

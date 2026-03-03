@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import solidPlugin from "vite-plugin-solid";
+import tsconfigPath from 'vite-tsconfig-paths'
 
 const host = process.env.TAURI_DEV_HOST;
 const isTauri =
@@ -24,6 +25,7 @@ export default defineConfig({
     },
     solidPlugin(),
     tailwindcss(),
+    tsconfigPath(),
   ],
   server: {
     port: 2556,

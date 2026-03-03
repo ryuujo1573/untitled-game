@@ -123,7 +123,6 @@ export class InputManager {
       }
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
-    window.addEventListener("blur", () => this.keys.clear());
 
     // Left-click: request pointer lock when not locked; break block when locked.
     // Right-click: place block when locked.
@@ -171,6 +170,9 @@ export class InputManager {
       this.keys.clear();
       if (this.inputBackend.isLocked()) {
         this.inputBackend.unlock();
+      }
+      if (!this.pauseMenu.paused) {
+        this.pauseMenu.pause();
       }
     });
   }
