@@ -15,6 +15,30 @@ export enum BlockType {
 }
 
 /**
+ * Light emission level (0-15) for each block type.
+ * Index = BlockType enum value.  0 = non-emissive.
+ */
+export const BLOCK_EMISSION: ReadonlyArray<number> = [
+  0,  // Air
+  0,  // Grass
+  0,  // Dirt
+  0,  // Stone
+  0,  // CoalOre
+  0,  // IronOre
+  0,  // GoldOre (faint glow, like Nether gold)
+  0,  // DiamondOre
+  0,  // EmeraldOre
+  0,  // LapisOre
+  9,  // RedstoneOre — characteristic red glow (level 9, ~torch brightness)
+  0,  // CopperOre
+];
+
+/** Returns true for solid blocks that fully block light propagation. */
+export function isOpaque(type: BlockType): boolean {
+  return type !== BlockType.Air;
+}
+
+/**
  * Maps each block type to the atlas tile index for each face.
  * Face order: [+Y (top), -Y (bottom), +X, -X, +Z, -Z]
  *

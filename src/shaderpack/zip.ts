@@ -1,12 +1,26 @@
 import { unzipSync, strFromU8 } from "fflate";
 
+const BINARY_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".gif", ".webp", ".hdr",
+]);
+
+function isBinaryPath(path: string): boolean {
+  const dot = path.lastIndexOf(".");
+  if (dot < 0) return false;
+  return BINARY_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
 export interface ZipExtractResult {
   files: Map<string, string>;
+  binaryFiles: Map<string, Uint8Array>;
   warnings: string[];
 }
 
 /**
- * Extract a ZIP archive into a virtual file map.
+ * Extract a ZIP archive into virtual file maps.
+ *
+ * Text files (shaders, properties, etc.) go into `files`.
+ * Binary files (PNG, JPG, TGA textures) go into `binaryFiles`.
  *
  * Keys are relative paths (e.g. "shaders/composite.fsh").
  * If the zip contains a single top-level directory that wraps everything,
@@ -16,10 +30,15 @@ export async function extractZipToVirtualFiles(bytes: Uint8Array): Promise<ZipEx
   const warnings: string[] = [];
   const raw = unzipSync(bytes);
   const files = new Map<string, string>();
+  const binaryFiles = new Map<string, Uint8Array>();
 
   for (const [path, data] of Object.entries(raw)) {
-    // Skip directories (entries ending with /) and empty entries.
     if (path.endsWith("/") || data.length === 0) continue;
+
+    if (isBinaryPath(path)) {
+      binaryFiles.set(path, data);
+      continue;
+    }
 
     try {
       files.set(path, strFromU8(data));
@@ -30,19 +49,23 @@ export async function extractZipToVirtualFiles(bytes: Uint8Array): Promise<ZipEx
 
   // If every path shares a common top-level directory prefix, strip it.
   // This handles zips like "SEUS-PTGI-E12/shaders/..." → "shaders/..."
-  const keys = [...files.keys()];
-  if (keys.length > 0) {
-    const firstSegment = keys[0].split("/")[0];
-    const allSharePrefix = keys.every((k) => k.startsWith(firstSegment + "/"));
+  const allKeys = [...files.keys(), ...binaryFiles.keys()];
+  if (allKeys.length > 0) {
+    const firstSegment = allKeys[0].split("/")[0];
+    const allSharePrefix = allKeys.every((k) => k.startsWith(firstSegment + "/"));
     if (allSharePrefix) {
       const prefix = firstSegment + "/";
-      const stripped = new Map<string, string>();
+      const strippedFiles = new Map<string, string>();
       for (const [k, v] of files) {
-        stripped.set(k.slice(prefix.length), v);
+        strippedFiles.set(k.slice(prefix.length), v);
       }
-      return { files: stripped, warnings };
+      const strippedBinary = new Map<string, Uint8Array>();
+      for (const [k, v] of binaryFiles) {
+        strippedBinary.set(k.slice(prefix.length), v);
+      }
+      return { files: strippedFiles, binaryFiles: strippedBinary, warnings };
     }
   }
 
-  return { files, warnings };
+  return { files, binaryFiles, warnings };
 }

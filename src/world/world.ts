@@ -1,5 +1,6 @@
 import { Chunk, CHUNK_SIZE } from "./chunk";
 import { BlockType } from "./block";
+import { recomputeWorldLight } from "./light-engine";
 
 /** Deterministic 3-D hash for ore placement, returns [0, 1). */
 function oreRng(wx: number, y: number, wz: number): number {
@@ -47,8 +48,41 @@ export class World {
   }
 
   /**
+   * Get the sky light level (0-15) at world coordinates.
+   * Returns 15 for unloaded chunks or above the world (open sky).
+   * Returns 0 for below y=0 (bedrock).
+   */
+  getSkyLight(wx: number, wy: number, wz: number): number {
+    if (wy < 0) return 0;
+    if (wy >= CHUNK_SIZE) return 15;
+    const cx = Math.floor(wx / CHUNK_SIZE);
+    const cz = Math.floor(wz / CHUNK_SIZE);
+    const chunk = this.getChunk(cx, cz);
+    if (!chunk) return 15;
+    const lx = wx - cx * CHUNK_SIZE;
+    const lz = wz - cz * CHUNK_SIZE;
+    return chunk.getSkyLight(lx, wy, lz);
+  }
+
+  /**
+   * Get the block light level (0-15) at world coordinates.
+   * Returns 0 for unloaded chunks or out-of-range positions.
+   */
+  getBlockLight(wx: number, wy: number, wz: number): number {
+    if (wy < 0 || wy >= CHUNK_SIZE) return 0;
+    const cx = Math.floor(wx / CHUNK_SIZE);
+    const cz = Math.floor(wz / CHUNK_SIZE);
+    const chunk = this.getChunk(cx, cz);
+    if (!chunk) return 0;
+    const lx = wx - cx * CHUNK_SIZE;
+    const lz = wz - cz * CHUNK_SIZE;
+    return chunk.getBlockLight(lx, wy, lz);
+  }
+
+  /**
    * Set a block at world coordinates. Returns the affected Chunk
    * so the caller can rebuild its mesh, or null if out of range.
+   * Triggers a full world-light recomputation.
    */
   setBlock(wx: number, wy: number, wz: number, type: BlockType): Chunk | null {
     if (wy < 0 || wy >= CHUNK_SIZE) return null;
@@ -59,6 +93,9 @@ export class World {
     const lx = wx - cx * CHUNK_SIZE;
     const lz = wz - cz * CHUNK_SIZE;
     chunk.setBlock(lx, wy, lz, type);
+    // Recompute world light after any block change so meshes can sample
+    // up-to-date sky / block light from the chunk arrays.
+    recomputeWorldLight(this);
     return chunk;
   }
 
@@ -114,6 +151,8 @@ export class World {
         this.chunks.set(this.key(cx, cz), chunk);
       }
     }
+    // Compute initial light distribution for all chunks.
+    recomputeWorldLight(this);
   }
 
   toSnapshot(): { generator: { kind: "default_heightmap"; gridSize: number }; chunks: Array<{ cx: number; cz: number; blocks: Uint8Array }> } {
@@ -136,6 +175,7 @@ export class World {
       const chunk = Chunk.fromSnapshot(chunkSnapshot);
       world.chunks.set(world.key(chunk.cx, chunk.cz), chunk);
     }
+    recomputeWorldLight(world);
     return world;
   }
 }

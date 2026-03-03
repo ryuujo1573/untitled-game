@@ -1,7 +1,19 @@
 import { readDir, readTextFile, readFile } from "@tauri-apps/plugin-fs";
 
+const TEXT_EXTENSIONS = new Set([
+  ".vsh", ".fsh", ".gsh", ".csh", ".glsl", ".inc", ".properties",
+]);
+const BINARY_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".gif", ".webp", ".hdr",
+]);
+
 function normalize(path: string): string {
   return path.replace(/\\/g, "/");
+}
+
+function getExtension(path: string): string {
+  const dot = path.lastIndexOf(".");
+  return dot >= 0 ? path.slice(dot).toLowerCase() : "";
 }
 
 async function walkDirRecursive(root: string): Promise<string[]> {
@@ -27,21 +39,31 @@ async function walkDirRecursive(root: string): Promise<string[]> {
   return files;
 }
 
-export async function buildVirtualFilesFromFolder(folderPath: string): Promise<Map<string, string>> {
+export interface FolderLoadResult {
+  textFiles: Map<string, string>;
+  binaryFiles: Map<string, Uint8Array>;
+}
+
+export async function buildVirtualFilesFromFolder(folderPath: string): Promise<FolderLoadResult> {
   const normalizedRoot = normalize(folderPath).replace(/\/+$/, "");
   const allFiles = await walkDirRecursive(normalizedRoot);
-  const out = new Map<string, string>();
+  const textFiles = new Map<string, string>();
+  const binaryFiles = new Map<string, Uint8Array>();
 
   for (const abs of allFiles) {
     const rel = normalize(abs).slice(normalizedRoot.length).replace(/^\/+/, "");
-    if (!(rel.endsWith(".vsh") || rel.endsWith(".fsh") || rel.endsWith(".glsl") || rel.endsWith(".properties"))) {
-      continue;
+    const ext = getExtension(rel);
+
+    if (TEXT_EXTENSIONS.has(ext)) {
+      const text = await readTextFile(abs);
+      textFiles.set(rel, text);
+    } else if (BINARY_EXTENSIONS.has(ext)) {
+      const bytes = await readFile(abs);
+      binaryFiles.set(rel, bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer));
     }
-    const text = await readTextFile(abs);
-    out.set(rel, text);
   }
 
-  return out;
+  return { textFiles, binaryFiles };
 }
 
 export async function readZipFileBytes(path: string): Promise<Uint8Array> {

@@ -1,7 +1,7 @@
 // =============================================================================
 // gbuffers_terrain.wgsl
 //
-// GBuffer terrain pass — fills three render targets with material data that
+// GBuffer terrain pass — fills four render targets with material data that
 // the deferred_lighting pass will consume.
 //
 // Bind groups:
@@ -16,14 +16,16 @@
 //
 // Vertex buffer slots:
 //   0 — position (vec3f, stride 12)
-//   1 — uvl      (vec4f, stride 16) — xy=localUV, z=tileIdx, w=baked light
+//   1 — uvl      (vec4f, stride 16) — xy=localUV, z=tileIdx, w=dirLight
 //   2 — normal   (vec3f, stride 12) — object-space face normal
 //   3 — tangent  (vec4f, stride 16) — xyz=T direction, w=bitangent sign
+//   4 — lightmap (vec2f, stride  8) — x=skyLight/15, y=blockLight/15
 //
 // GBuffer layout:
 //   @location(0) albedoRoughness  rgba8unorm  — rgb=albedo,       a=roughness
 //   @location(1) normalMetallic   rgba16float — rgb=viewN[0,1],   a=F0
-//   @location(2) emissiveAO       rgba8unorm  — rgb=emissive RGB, a=AO
+//   @location(2) emissiveAO       rgba8unorm  — rgb=emissive RGB, a=bakedAO
+//   @location(3) lightmap         rgba8unorm  — r=skyLight/15, g=blockLight/15
 // =============================================================================
 
 // ── Uniforms ──────────────────────────────────────────────────────────────────
@@ -55,9 +57,10 @@ struct ChunkUniforms {
 
 struct VsIn {
     @location(0) position: vec3f,
-    @location(1) uvl:      vec4f,  // xy=localUV, z=tileIdx, w=bakedLight
+    @location(1) uvl:      vec4f,  // xy=localUV, z=tileIdx, w=dirLight
     @location(2) normal:   vec3f,
     @location(3) tangent:  vec4f,  // xyz=T direction, w=bitangent sign
+    @location(4) lightmap: vec2f,  // x=skyLight/15, y=blockLight/15
 }
 
 struct VsOut {
@@ -65,6 +68,7 @@ struct VsOut {
     @location(0)       uvl:         vec4f,
     @location(1)       viewNormal:  vec3f,
     @location(2)       viewTangent: vec4f,  // xyz=T(view), w=bitangentSign
+    @location(3)       lightmap:    vec2f,  // passed through to fragment
 }
 
 @vertex fn vs_main(in: VsIn) -> VsOut {
@@ -84,6 +88,7 @@ struct VsOut {
     out.uvl         = in.uvl;
     out.viewNormal  = vN;
     out.viewTangent = vec4f(vT, in.tangent.w);
+    out.lightmap    = in.lightmap;
     return out;
 }
 
@@ -103,7 +108,8 @@ fn atlasUV(localUV: vec2f, tileIdx: f32) -> vec2f {
 struct GBufOut {
     @location(0) albedoRoughness: vec4f,  // rgb=albedo,  a=perceptual roughness
     @location(1) normalMetallic:  vec4f,  // rgb=viewN encoded [0,1], a=F0
-    @location(2) emissiveAO:      vec4f,  // rgb=emissive (HDR), a=AO
+    @location(2) emissiveAO:      vec4f,  // rgb=emissive (HDR), a=bakedAO (dirLight × materialAO)
+    @location(3) lightmap:        vec4f,  // r=skyLight/15, g=blockLight/15, ba=unused
 }
 
 @fragment fn fs_main(in: VsOut) -> GBufOut {
@@ -146,9 +152,15 @@ struct GBufOut {
     // A: emissive brightness, tinted by albedo colour.
     let emissive = ss.a * albedo.rgb;
 
+    // Combine per-face directional shading (bakedLight, uvl.w: 0.5 bottom / 0.7-0.8 sides / 1.0 top)
+    // with material AO from the normal atlas. The deferred pass reads this as a combined
+    // sky-light modulator: dark undersides + occluded texels stay dark, lit tops stay bright.
+    let bakedAO = in.uvl.w * ao;
+
     var out: GBufOut;
     out.albedoRoughness = vec4f(albedo.rgb, roughness);
     out.normalMetallic  = vec4f(vN * 0.5 + 0.5, f0);  // encode normal to [0,1]
-    out.emissiveAO      = vec4f(emissive, ao);
+    out.emissiveAO      = vec4f(emissive, bakedAO);
+    out.lightmap        = vec4f(in.lightmap.x, in.lightmap.y, 0.0, 1.0);
     return out;
 }

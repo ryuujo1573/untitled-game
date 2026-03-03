@@ -70,8 +70,20 @@ interface ChunkGPUData {
   uvlBuffer:   GPUBuffer;
   norBuffer:   GPUBuffer;  // normals  (vec3f, stride 12)
   tanBuffer:   GPUBuffer;  // tangents (vec4f, stride 16, w = bitangent sign)
+  lightBuffer: GPUBuffer;  // lightmap (vec2f, stride  8, xy = skyLight/blockLight 0-1)
   modelBuffer: GPUBuffer;
   bindGroup:   GPUBindGroup; // group 1 for GBuffer terrain pipeline
+  vertexCount: number;
+}
+
+/** Visible-chunk data passed into each GBuffer draw call. */
+interface ChunkRenderData {
+  posBuffer:   GPUBuffer;
+  uvlBuffer:   GPUBuffer;
+  norBuffer:   GPUBuffer;
+  tanBuffer:   GPUBuffer;
+  lightBuffer: GPUBuffer;
+  modelBuffer: GPUBuffer;
   vertexCount: number;
 }
 
@@ -200,7 +212,7 @@ export class WebGPURenderer implements IRenderer {
       ],
     });
 
-    // Deferred lighting – Group 0: GFrameUBO + 3 GBuffer textures + depth
+    // Deferred lighting – Group 0: GFrameUBO + 3 GBuffer textures + depth + lightmap
     // Uses textureLoad (integer coords) so no sampler is needed.
     const deferredLayout = device.createBindGroupLayout({
       label: "deferred",
@@ -212,6 +224,7 @@ export class WebGPURenderer implements IRenderer {
         { binding: 4, visibility: FS, texture: { sampleType: "depth" } },             // gbufDepth
         { binding: 5, visibility: FS, texture: { sampleType: "float" } },             // skybox
         { binding: 6, visibility: FS, sampler: { type: "filtering" } },               // skybox sampler
+        { binding: 7, visibility: FS, texture: { sampleType: "float" } },             // gbuf3 lightmap rgba8unorm
       ],
     });
 
@@ -242,7 +255,7 @@ export class WebGPURenderer implements IRenderer {
     const cloudsPipelineLayout   = device.createPipelineLayout({ bindGroupLayouts: [cloudsLayout] });
     const tonemapPipelineLayout  = device.createPipelineLayout({ bindGroupLayouts: [tonemapLayout]  });
 
-    // GBuffer terrain pipeline: 4 vertex buffer slots, 3 MRT outputs + depth.
+    // GBuffer terrain pipeline: 5 vertex buffer slots, 4 MRT outputs + depth.
     const gbufPipeline = device.createRenderPipeline({
       label: "gbufTerrain",
       layout: gbufPipelineLayout,
@@ -253,6 +266,7 @@ export class WebGPURenderer implements IRenderer {
           { arrayStride: 16, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x4" }] }, // uvl
           { arrayStride: 12, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x3" }] }, // normal
           { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "float32x4" }] }, // tangent
+          { arrayStride:  8, attributes: [{ shaderLocation: 4, offset: 0, format: "float32x2" }] }, // lightmap
         ],
       },
       fragment: {
@@ -261,6 +275,7 @@ export class WebGPURenderer implements IRenderer {
           { format: "rgba8unorm"  },  // colortex0: albedo + roughness
           { format: "rgba16float" },  // colortex1: view-space normal + F0
           { format: "rgba8unorm"  },  // colortex2: emissive + AO
+          { format: "rgba8unorm"  },  // colortex3: lightmap (sky r, block g)
         ],
       },
       primitive:    { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
@@ -479,6 +494,7 @@ export class WebGPURenderer implements IRenderer {
     let gbuf0Tex:     GPUTexture | null = null;  // rgba8unorm  albedo+roughness
     let gbuf1Tex:     GPUTexture | null = null;  // rgba16float normal+F0
     let gbuf2Tex:     GPUTexture | null = null;  // rgba8unorm  emissive+AO
+    let gbuf3Tex:     GPUTexture | null = null;  // rgba8unorm  lightmap (sky r, block g)
     let gbufDepthTex: GPUTexture | null = null;  // depth24plus (sampleable)
 
     let deferredPipeline = buildDeferredPipeline(presentationFormat);
@@ -523,7 +539,7 @@ export class WebGPURenderer implements IRenderer {
     });
     let tonemapBindGroup:  GPUBindGroup | null = null;
     const shaderRegistry = new ShaderProgramRegistry();
-    let lastShaderpackSignature = "";
+    // All stages use the built-in pipeline (no runtime GLSL→WGSL compilation).
     for (const stage of STAGE_NAMES) {
       shaderRegistry.setBuiltin(stage, "Built-in pipeline");
     }
@@ -536,6 +552,7 @@ export class WebGPURenderer implements IRenderer {
       gbuf0Tex?.destroy();
       gbuf1Tex?.destroy();
       gbuf2Tex?.destroy();
+      gbuf3Tex?.destroy();
       gbufDepthTex?.destroy();
 
       const mkTex = (fmt: GPUTextureFormat, label: string) =>
@@ -547,6 +564,7 @@ export class WebGPURenderer implements IRenderer {
       gbuf0Tex     = mkTex("rgba8unorm",  "gbuf0");
       gbuf1Tex     = mkTex("rgba16float", "gbuf1");
       gbuf2Tex     = mkTex("rgba8unorm",  "gbuf2");
+      gbuf3Tex     = mkTex("rgba8unorm",  "gbuf3");
       gbufDepthTex = mkTex("depth24plus", "gbufDepth");
 
       deferredBindGroup = device.createBindGroup({
@@ -560,6 +578,7 @@ export class WebGPURenderer implements IRenderer {
           { binding: 4, resource: gbufDepthTex.createView() },
           { binding: 5, resource: skyboxTex.createView() },
           { binding: 6, resource: skyboxSampler },
+          { binding: 7, resource: gbuf3Tex.createView() },
         ],
       });
     }
@@ -603,6 +622,7 @@ export class WebGPURenderer implements IRenderer {
         old.uvlBuffer.destroy();
         old.norBuffer.destroy();
         old.tanBuffer.destroy();
+        old.lightBuffer.destroy();
         old.modelBuffer.destroy();
         chunkData.delete(chunk);
       }
@@ -621,10 +641,11 @@ export class WebGPURenderer implements IRenderer {
         return buf;
       };
 
-      const posBuffer = mkVB(mesh.positions, `pos(${chunk.cx},${chunk.cz})`);
-      const uvlBuffer = mkVB(mesh.uvls,      `uvl(${chunk.cx},${chunk.cz})`);
-      const norBuffer = mkVB(mesh.normals,   `nor(${chunk.cx},${chunk.cz})`);
-      const tanBuffer = mkVB(mesh.tangents,  `tan(${chunk.cx},${chunk.cz})`);
+      const posBuffer   = mkVB(mesh.positions, `pos(${chunk.cx},${chunk.cz})`);
+      const uvlBuffer   = mkVB(mesh.uvls,      `uvl(${chunk.cx},${chunk.cz})`);
+      const norBuffer   = mkVB(mesh.normals,   `nor(${chunk.cx},${chunk.cz})`);
+      const tanBuffer   = mkVB(mesh.tangents,  `tan(${chunk.cx},${chunk.cz})`);
+      const lightBuffer = mkVB(mesh.lights,    `lgt(${chunk.cx},${chunk.cz})`);
 
       const modelMat = mat4.create();
       mat4.translate(modelMat, modelMat, [chunk.cx * CHUNK_SIZE, 0, chunk.cz * CHUNK_SIZE]);
@@ -644,7 +665,7 @@ export class WebGPURenderer implements IRenderer {
       });
 
       chunkData.set(chunk, {
-        posBuffer, uvlBuffer, norBuffer, tanBuffer,
+        posBuffer, uvlBuffer, norBuffer, tanBuffer, lightBuffer,
         modelBuffer, bindGroup, vertexCount: mesh.vertexCount,
       });
     }
@@ -701,14 +722,7 @@ export class WebGPURenderer implements IRenderer {
       input.update();
 
       const shaderpackSnapshot = getShaderpackStateSnapshot();
-      const signature = [
-        shaderpackSnapshot.active?.name ?? "none",
-        ...shaderpackSnapshot.stageStatuses.map((s) => `${s.stage}:${s.mode}:${s.reason ?? ""}`),
-      ].join("|");
-      if (signature !== lastShaderpackSignature) {
-        shaderRegistry.sync(shaderpackSnapshot.stageStatuses);
-        lastShaderpackSignature = signature;
-      }
+      shaderRegistry.sync(shaderpackSnapshot.stageStatuses);
       const cloudsMode = shaderpackSnapshot.manifest?.properties.clouds ?? "fancy";
 
       const wantHdr = Settings.hdr && Settings.hdrSupported;
@@ -772,8 +786,8 @@ export class WebGPURenderer implements IRenderer {
       gframeUBOData[75] = 1.0;                                             // ambientColor.w (already scaled)
       gframeUBOData[76] = skyR; gframeUBOData[77] = skyG; gframeUBOData[78] = skyB;
       gframeUBOData[79] = 40.0;                                            // fogNear
-      gframeUBOData[80] = 80.0;                                            // fogFar
-      // indices 81-83 stay 0 (padding)
+      gframeUBOData[80] = 80.0;                                            // fogFar.x
+      // indices 81-83 unused (sky exposure now comes from per-vertex lightmap gbuf3)
       device.queue.writeBuffer(gframeUBO, 0, gframeUBOData);
 
       const cloudWind = Time.time * 0.75;
@@ -806,6 +820,31 @@ export class WebGPURenderer implements IRenderer {
       // ── Command encoding ──────────────────────────────────────────────
       const encoder = device.createCommandEncoder({ label: "frame" });
 
+      // ── Collect visible chunks ────────────────────────────────────────
+      const visibleChunkData: ChunkRenderData[] = [];
+      const visibleChunkBindGroups: GPUBindGroup[] = []; // parallel to visibleChunkData
+      let drawCalls = 0, drawnVerts = 0, totalVerts = 0;
+      world.chunks.forEach((c) => { totalVerts += chunkData.get(c)?.vertexCount ?? 0; });
+      world.chunks.forEach((chunk) => {
+        const cd = chunkData.get(chunk);
+        if (!cd || cd.vertexCount === 0) return;
+        const wx0 = chunk.cx * CHUNK_SIZE, wz0 = chunk.cz * CHUNK_SIZE;
+        if (!frustum.containsAABB(wx0, 0, wz0, wx0 + CHUNK_SIZE, CHUNK_SIZE, wz0 + CHUNK_SIZE))
+          return;
+        drawCalls++;
+        drawnVerts += cd.vertexCount;
+        visibleChunkData.push({
+          posBuffer:   cd.posBuffer,
+          uvlBuffer:   cd.uvlBuffer,
+          norBuffer:   cd.norBuffer,
+          tanBuffer:   cd.tanBuffer,
+          lightBuffer: cd.lightBuffer,
+          modelBuffer: cd.modelBuffer,
+          vertexCount: cd.vertexCount,
+        });
+        visibleChunkBindGroups.push(cd.bindGroup);
+      });
+
       // ── Pass 1: GBuffer terrain ───────────────────────────────────────
       const gbufPass = encoder.beginRenderPass({
         label: "gbuffer",
@@ -813,6 +852,7 @@ export class WebGPURenderer implements IRenderer {
           { view: gbuf0Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:0 } },
           { view: gbuf1Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:0 } },
           { view: gbuf2Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:0 } },
+          { view: gbuf3Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:1 } },
         ],
         depthStencilAttachment: {
           view: gbufDepthTex!.createView(),
@@ -823,24 +863,13 @@ export class WebGPURenderer implements IRenderer {
       gbufPass.setPipeline(gbufPipeline);
       gbufPass.setBindGroup(0, gbufFrameBindGroup);
 
-      let drawCalls = 0, drawnVerts = 0, totalVerts = 0;
-      world.chunks.forEach((c) => { totalVerts += chunkData.get(c)?.vertexCount ?? 0; });
-
-      world.chunks.forEach((chunk) => {
-        const cd = chunkData.get(chunk);
-        if (!cd || cd.vertexCount === 0) return;
-
-        const wx0 = chunk.cx * CHUNK_SIZE, wz0 = chunk.cz * CHUNK_SIZE;
-        if (!frustum.containsAABB(wx0, 0, wz0, wx0 + CHUNK_SIZE, CHUNK_SIZE, wz0 + CHUNK_SIZE))
-          return;
-
-        drawCalls++;
-        drawnVerts += cd.vertexCount;
-        gbufPass.setBindGroup(1, cd.bindGroup);
+      visibleChunkData.forEach((cd, i) => {
+        gbufPass.setBindGroup(1, visibleChunkBindGroups[i]);
         gbufPass.setVertexBuffer(0, cd.posBuffer);
         gbufPass.setVertexBuffer(1, cd.uvlBuffer);
         gbufPass.setVertexBuffer(2, cd.norBuffer);
         gbufPass.setVertexBuffer(3, cd.tanBuffer);
+        gbufPass.setVertexBuffer(4, cd.lightBuffer);
         gbufPass.draw(cd.vertexCount);
       });
       gbufPass.end();

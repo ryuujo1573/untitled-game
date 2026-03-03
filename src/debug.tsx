@@ -13,6 +13,56 @@ import {
 import type { Component } from "solid-js";
 import { getShaderpackStateSnapshot } from "~/shaderpack/runtime";
 
+// ── Light debug helpers ─────────────────────────────────────────
+
+/** Project a world-space point to canvas pixel coords.
+ *  Returns null if the point is behind the camera or outside the frustum.
+ *  viewMat / projMat are column-major Float32Array (gl-matrix convention). */
+function worldToScreen(
+  wx: number, wy: number, wz: number,
+  view: Float32Array, proj: Float32Array,
+  sw: number, sh: number,
+): [number, number] | null {
+  // view * [wx, wy, wz, 1]  (column-major: result.x = col0·v + col4·v + ...)
+  const vx = view[0]*wx + view[4]*wy + view[8] *wz + view[12];
+  const vy = view[1]*wx + view[5]*wy + view[9] *wz + view[13];
+  const vz = view[2]*wx + view[6]*wy + view[10]*wz + view[14];
+  const vw = view[3]*wx + view[7]*wy + view[11]*wz + view[15];
+
+  if (vz >= -0.1) return null; // behind or on near plane
+
+  // proj * [vx, vy, vz, vw]
+  const cx = proj[0]*vx + proj[4]*vy + proj[8] *vz + proj[12]*vw;
+  const cy = proj[1]*vx + proj[5]*vy + proj[9] *vz + proj[13]*vw;
+  const cw = proj[3]*vx + proj[7]*vy + proj[11]*vz + proj[15]*vw;
+
+  const ndcX = cx / cw;
+  const ndcY = cy / cw;
+
+  // Clip a generous margin (labels near edge can still be useful)
+  if (ndcX < -1.1 || ndcX > 1.1 || ndcY < -1.1 || ndcY > 1.1) return null;
+
+  return [(ndcX + 1) * 0.5 * sw, (1 - ndcY) * 0.5 * sh];
+}
+
+/** Blue-tinted colour scale for sky light (0=dark, 15=bright cyan-white). */
+function skyLightColor(level: number): string {
+  if (level === 0) return "#444";
+  const t = level / 15;
+  // hsl: hue 210 (sky blue), 100% saturation, lightness 18%→95%
+  const l = Math.round(18 + t * 77);
+  return `hsl(210,100%,${l}%)`;
+}
+
+/** Amber-tinted colour scale for block light (0=dark, 15=bright yellow). */
+function blockLightColor(level: number): string {
+  if (level === 0) return "#444";
+  const t = level / 15;
+  // hsl: hue 35 (amber), 100% saturation, lightness 18%→90%
+  const l = Math.round(18 + t * 72);
+  return `hsl(35,100%,${l}%)`;
+}
+
 export interface RenderStats {
   drawCalls: number;
   totalChunks: number;
@@ -328,7 +378,15 @@ export class DebugOverlay {
   private readonly state: () => DebugState;
   private readonly disposeUI: () => void;
   private readonly onKeyDown: (e: KeyboardEvent) => void;
+  private readonly onKeyUp: (e: KeyboardEvent) => void;
   private readonly root: HTMLDivElement;
+
+  // ── Light debug overlay ───────────────────────────────────────
+  private readonly lightCanvas: HTMLCanvasElement;
+  private readonly lightCtx: CanvasRenderingContext2D;
+  private readonly setLightDebug: (v: boolean) => void;
+  private readonly lightDebugVisible: () => boolean;
+  private f3Held = false;
 
   constructor(gl: WebGL2RenderingContext | null) {
     this.compass = document.getElementById(
@@ -336,6 +394,14 @@ export class DebugOverlay {
     ) as HTMLCanvasElement;
     this.crosshair = document.getElementById("crosshair")!;
     this.ctx = this.compass.getContext("2d")!;
+
+    // ── Light debug canvas (fullscreen, pointer-events: none) ────
+    const lightCanvas = document.createElement("canvas");
+    lightCanvas.style.cssText =
+      "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:24;display:none";
+    document.body.appendChild(lightCanvas);
+    this.lightCanvas = lightCanvas;
+    this.lightCtx    = lightCanvas.getContext("2d")!;
 
     const [visible, setVisible] = createSignal(false);
     const [state, setState] = createSignal<DebugState>({
@@ -371,10 +437,13 @@ export class DebugOverlay {
       },
     });
 
-    this.visible = visible;
-    this.setVisible = setVisible;
-    this.state = state;
-    this.setState = setState;
+    const [lightDebugVisible, setLightDebug] = createSignal(false);
+    this.visible          = visible;
+    this.setVisible       = setVisible;
+    this.state            = state;
+    this.setState         = setState;
+    this.lightDebugVisible = lightDebugVisible;
+    this.setLightDebug     = setLightDebug;
 
     // Render the UI once
     this.root = document.createElement("div");
@@ -433,16 +502,51 @@ export class DebugOverlay {
     this.onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "F3") {
         e.preventDefault();
+        this.f3Held = true;
         const v = !this.visible();
         this.setVisible(v);
         this.compass.style.display = v ? "block" : "none";
         this.crosshair.style.display = v ? "none" : "";
+        // Hide light debug when panel is hidden
+        if (!v && this.lightDebugVisible()) {
+          this.setLightDebug(false);
+          this.lightCanvas.style.display = "none";
+        }
+      } else if (e.code === "KeyL" && this.f3Held) {
+        // F3+L toggles light-level overlay
+        e.preventDefault();
+        const ld = !this.lightDebugVisible();
+        this.setLightDebug(ld);
+        this.lightCanvas.style.display = ld ? "block" : "none";
       }
     };
+
+    this.onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "F3") this.f3Held = false;
+    };
+
     window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keyup",   this.onKeyUp);
   }
 
   update(camera: Camera, world: World, stats: RenderStats): void {
+    if (!this.visible() && !this.lightDebugVisible()) return;
+
+    // ── Sync light-canvas pixel resolution to window ─────────────
+    const sw = window.innerWidth;
+    const sh = window.innerHeight;
+    if (this.lightCanvas.width !== sw || this.lightCanvas.height !== sh) {
+      this.lightCanvas.width  = sw;
+      this.lightCanvas.height = sh;
+    }
+
+    // Draw (or clear) the light-level overlay every frame
+    if (this.lightDebugVisible()) {
+      this.drawLightDebug(camera, world, sw, sh);
+    } else {
+      this.lightCtx.clearRect(0, 0, sw, sh);
+    }
+
     if (!this.visible()) return;
 
     const [px, py, pz] = camera.position;
@@ -526,6 +630,101 @@ export class DebugOverlay {
     this.drawCompass(yaw, pitch);
   }
 
+  private drawLightDebug(
+    camera: Camera,
+    world: World,
+    sw: number,
+    sh: number,
+  ): void {
+    const ctx = this.lightCtx;
+    ctx.clearRect(0, 0, sw, sh);
+
+    const [cpx, cpy, cpz] = camera.position;
+    const aspect = sw / sh;
+    const view = camera.getViewMatrix() as Float32Array;
+    const proj = camera.getProjectionMatrixZO(aspect) as Float32Array;
+
+    // Scan blocks in a 12-block radius XZ and ±5 Y around the player.
+    const RADIUS = 12;
+    const Y_RANGE = 5;
+    const bpx = Math.floor(cpx);
+    const bpy = Math.floor(cpy);
+    const bpz = Math.floor(cpz);
+
+    ctx.font = "bold 12px monospace";
+    ctx.lineWidth = 3;
+
+    for (let dy = -Y_RANGE; dy <= Y_RANGE; dy++) {
+      const wy = bpy + dy;
+
+      for (let dx = -RADIUS; dx <= RADIUS; dx++) {
+        for (let dz = -RADIUS; dz <= RADIUS; dz++) {
+          const wx = bpx + dx;
+          const wz = bpz + dz;
+
+          // Only draw label if there is a solid block here with air above
+          const block = world.getBlock(wx, wy, wz);
+          if (block === 0 /* Air */) continue;
+          if (world.getBlock(wx, wy + 1, wz) !== 0 /* Air */) continue;
+
+          // Sample the air block (wy+1) — this is what the face sees
+          const skyL   = world.getSkyLight(wx, wy + 1, wz);
+          const blockL = world.getBlockLight(wx, wy + 1, wz);
+
+          // Project the top-face centre (block unit = 1 m, face at wy+1)
+          const screen = worldToScreen(wx + 0.5, wy + 1.02, wz + 0.5, view, proj, sw, sh);
+          if (!screen) continue;
+
+          const [scx, scy] = screen;
+
+          // Distance-based fade
+          const dist2 = dx*dx + dy*dy + dz*dz;
+          if (dist2 > RADIUS * RADIUS) continue;
+          const alpha = Math.max(0.35, 1.0 - Math.sqrt(dist2) / RADIUS);
+
+          ctx.globalAlpha = alpha;
+
+          const skyStr = skyL.toString();
+          const blkStr = blockL.toString();
+          const GAP    = 3; // px gap between the two numbers
+
+          const skyW = ctx.measureText(skyStr).width;
+          const blkW = ctx.measureText(blkStr).width;
+          const totalW = skyW + GAP + blkW;
+          const padX = 3, padY = 2, h = 14;
+
+          // Dark background pill behind both numbers
+          ctx.globalAlpha = alpha * 0.55;
+          ctx.fillStyle = "#000";
+          ctx.beginPath();
+          const rx = scx - totalW / 2 - padX;
+          const ry = scy - h / 2 - padY;
+          ctx.roundRect(rx, ry, totalW + padX * 2, h + padY * 2, 3);
+          ctx.fill();
+          ctx.globalAlpha = alpha;
+
+          // Sky value — right half (blue palette), right-aligned at centre - gap/2
+          const skyX = scx - GAP / 2;
+          ctx.textAlign   = "right";
+          ctx.strokeStyle = "rgba(0,0,0,0.8)";
+          ctx.fillStyle   = skyLightColor(skyL);
+          ctx.strokeText(skyStr, skyX, scy + 4);
+          ctx.fillText(skyStr,   skyX, scy + 4);
+
+          // Block value — left half (amber palette), left-aligned at centre + gap/2
+          const blkX = scx + GAP / 2;
+          ctx.textAlign   = "left";
+          ctx.fillStyle   = blockLightColor(blockL);
+          ctx.strokeStyle = "rgba(0,0,0,0.8)";
+          ctx.strokeText(blkStr, blkX, scy + 4);
+          ctx.fillText(blkStr,   blkX, scy + 4);
+        }
+      }
+    }
+
+    ctx.globalAlpha = 1.0;
+  }
+
   private drawCompass(yaw: number, pitch: number): void {
     const size = this.compass.width; // 96 px
     const cx = size / 2;
@@ -594,7 +793,9 @@ export class DebugOverlay {
 
   destroy(): void {
     window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keyup",   this.onKeyUp);
     this.disposeUI();
     this.root.remove();
+    this.lightCanvas.remove();
   }
 }

@@ -2,8 +2,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { buildManifestFromVirtualFiles } from "~/shaderpack/loader";
 import { buildVirtualFilesFromBrowserFiles } from "~/shaderpack/loader-web";
 import { buildVirtualFilesFromFolder, readZipFileBytes } from "~/shaderpack/loader-tauri";
-import { transpileGLSLToWGSL } from "~/shaderpack/naga";
-import { preprocessShader } from "~/shaderpack/preprocess";
 import { extractZipToVirtualFiles } from "~/shaderpack/zip";
 import { addShaderpack, readShaderpackFiles } from "~/shaderpack/library";
 import { STAGE_NAMES, type ActiveShaderpackInfo, type ShaderStageName } from "~/shaderpack/types";
@@ -33,35 +31,29 @@ function emit(): void {
   for (const l of listeners) l();
 }
 
-function detectPlatform(): "windows" | "mac" | "linux" {
-  const p = navigator.platform.toLowerCase();
-  if (p.includes("win")) return "windows";
-  if (p.includes("mac")) return "mac";
-  return "linux";
-}
-
 function stripPackName(path: string): string {
   const clean = path.replace(/\\/g, "/").replace(/\/+$/, "");
   const last = clean.split("/").pop();
   return last && last.length > 0 ? last : "shaderpack";
 }
 
-async function loadVirtualFiles(source: ShaderpackSource): Promise<{ files: Map<string, string>; warnings: string[] }> {
+async function loadVirtualFiles(source: ShaderpackSource): Promise<{ files: Map<string, string>; binaryFiles: Map<string, Uint8Array>; warnings: string[] }> {
   if (source.kind === "vfs") {
-    return { files: await readShaderpackFiles(source.name), warnings: [] };
+    return { files: await readShaderpackFiles(source.name), binaryFiles: new Map(), warnings: [] };
   }
 
   if (source.kind === "browser-files") {
-    return { files: await buildVirtualFilesFromBrowserFiles(source.files), warnings: [] };
+    return { files: await buildVirtualFilesFromBrowserFiles(source.files), binaryFiles: new Map(), warnings: [] };
   }
 
   if (source.kind === "folder") {
-    return { files: await buildVirtualFilesFromFolder(source.path), warnings: [] };
+    const result = await buildVirtualFilesFromFolder(source.path);
+    return { files: result.textFiles, binaryFiles: result.binaryFiles, warnings: [] };
   }
 
   const bytes = await readZipFileBytes(source.path);
   const extracted = await extractZipToVirtualFiles(bytes);
-  return { files: extracted.files, warnings: extracted.warnings };
+  return { files: extracted.files, binaryFiles: extracted.binaryFiles, warnings: extracted.warnings };
 }
 
 function deriveName(source: ShaderpackSource): string {
@@ -83,41 +75,19 @@ function stageStatusBase(stage: ShaderStageName, reason: string): ShaderStageSta
   return { stage, mode: "builtin", reason };
 }
 
-async function computeStageStatuses(manifest: ShaderpackManifest): Promise<ShaderStageStatus[]> {
-  const statuses: ShaderStageStatus[] = [];
-  const platform = detectPlatform();
-
-  for (const stage of STAGE_NAMES) {
+/**
+ * Walk the manifest and report every stage as "builtin".
+ * GLSL→WGSL compilation has been removed; shaderpacks are loaded for
+ * property-parsing purposes only (clouds mode, block-id maps, etc.).
+ */
+function computeStageStatuses(manifest: ShaderpackManifest): ShaderStageStatus[] {
+  return STAGE_NAMES.map((stage) => {
     const p = manifest.programs.get(stage);
-    if (!p) {
-      statuses.push(stageStatusBase(stage, "Missing stage program in pack"));
-      continue;
+    if (!p || (!p.fragment && !p.vertex)) {
+      return stageStatusBase(stage, "No stage in pack");
     }
-
-    const shaderSource = p.fragment ?? p.vertex;
-    if (!shaderSource) {
-      statuses.push(stageStatusBase(stage, "Stage has no shader source"));
-      continue;
-    }
-
-    const pre = preprocessShader({
-      source: shaderSource,
-      stage,
-      includeMap: manifest.includes,
-      options: manifest.properties.options,
-      platform,
-    });
-
-    const transpile = await transpileGLSLToWGSL(pre.code, p.fragment ? "fragment" : "vertex");
-    if (!transpile.ok) {
-      statuses.push(stageStatusBase(stage, transpile.error ?? "GLSL->WGSL transpile failed"));
-      continue;
-    }
-
-    statuses.push({ stage, mode: "override" });
-  }
-
-  return statuses;
+    return stageStatusBase(stage, "GLSL→WGSL compilation unavailable");
+  });
 }
 
 export function subscribeShaderpackRuntime(listener: () => void): () => void {
@@ -140,7 +110,7 @@ export function getShaderpackStateSnapshot(): ShaderpackRuntimeState {
 export async function loadShaderpack(source: ShaderpackSource): Promise<void> {
   const sourceWarnings: string[] = [];
   try {
-    const { files, warnings } = await loadVirtualFiles(source);
+    const { files, binaryFiles, warnings } = await loadVirtualFiles(source);
     sourceWarnings.push(...warnings);
 
     if (!files.has("shaders/shaders.properties") && ![...files.keys()].some((p) => p.startsWith("shaders/"))) {
@@ -148,8 +118,8 @@ export async function loadShaderpack(source: ShaderpackSource): Promise<void> {
     }
 
     const name = deriveName(source);
-    const manifest = buildManifestFromVirtualFiles(files, name);
-    const stageStatuses = await computeStageStatuses(manifest);
+    const manifest = buildManifestFromVirtualFiles(files, name, binaryFiles);
+    const stageStatuses = computeStageStatuses(manifest);
 
     const warningsCombined = [
       ...sourceWarnings,

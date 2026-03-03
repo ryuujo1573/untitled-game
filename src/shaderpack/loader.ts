@@ -1,28 +1,12 @@
 import { parseBlockProperties } from "~/shaderpack/parse-block-properties";
 import { parseDrawTargetsFromShaderSource } from "~/shaderpack/parse-drawbuffers";
 import { parseShadersProperties } from "~/shaderpack/parse-properties";
+import { STAGE_NAMES } from "~/shaderpack/types";
 import type {
   ShaderpackManifest,
   ShaderpackProgram,
   ShaderStageName,
 } from "~/shaderpack/types";
-
-const STAGES: ShaderStageName[] = [
-  "shadow",
-  "shadow_solid",
-  "shadow_cutout",
-  "gbuffers_clouds",
-  "gbuffers_terrain",
-  "deferred",
-  "deferred1",
-  "deferred2",
-  "deferred3",
-  "composite",
-  "composite1",
-  "composite2",
-  "composite3",
-  "final",
-];
 
 function normalize(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\/+/, "");
@@ -31,6 +15,7 @@ function normalize(path: string): string {
 export function buildManifestFromVirtualFiles(
   files: Map<string, string>,
   packName: string,
+  binaryFiles?: Map<string, Uint8Array>,
 ): ShaderpackManifest {
   const normalized = new Map<string, string>();
   for (const [k, v] of files) {
@@ -40,13 +25,17 @@ export function buildManifestFromVirtualFiles(
   const programs = new Map<ShaderStageName, ShaderpackProgram>();
   const includes = new Map<string, string>();
 
-  for (const stage of STAGES) {
+  for (const stage of STAGE_NAMES) {
     const vsh = normalized.get(`shaders/${stage}.vsh`);
     const fsh = normalized.get(`shaders/${stage}.fsh`);
-    if (!vsh && !fsh) continue;
+    const gsh = normalized.get(`shaders/${stage}.gsh`);
+    const csh = normalized.get(`shaders/${stage}.csh`);
+    if (!vsh && !fsh && !csh) continue;
 
     const prog: ShaderpackProgram = { stage };
     if (vsh) prog.vertex = vsh;
+    if (gsh) prog.geometry = gsh;
+    if (csh) prog.compute = csh;
     if (fsh) {
       prog.fragment = fsh;
       const targets = parseDrawTargetsFromShaderSource(fsh);
@@ -61,7 +50,10 @@ export function buildManifestFromVirtualFiles(
 
   for (const [path, content] of normalized) {
     if (!path.startsWith("shaders/")) continue;
-    if (path.endsWith(".vsh") || path.endsWith(".fsh")) continue;
+    if (
+      path.endsWith(".vsh") || path.endsWith(".fsh") ||
+      path.endsWith(".gsh") || path.endsWith(".csh")
+    ) continue;
     if (path.endsWith(".properties")) continue;
     includes.set(path.slice("shaders/".length), content);
   }
@@ -75,5 +67,6 @@ export function buildManifestFromVirtualFiles(
     properties,
     blockMap,
     includes,
+    binaryFiles: binaryFiles ?? new Map(),
   };
 }

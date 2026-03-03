@@ -173,9 +173,9 @@ function DropOverlayUI() {
               } else {
                 // Directory: read folder files.
                 const { buildVirtualFilesFromFolder } = await import("~/shaderpack/loader-tauri");
-                const files = await buildVirtualFilesFromFolder(path);
-                if (files.size > 0) {
-                  await loadShaderpack({ kind: "browser-files", files: fileListFromMap(files), name: packName });
+                const result = await buildVirtualFilesFromFolder(path);
+                if (result.textFiles.size > 0) {
+                  await loadShaderpack({ kind: "browser-files", files: fileListFromMap(result.textFiles), name: packName });
                 }
               }
               navigateToShaderpacks();
