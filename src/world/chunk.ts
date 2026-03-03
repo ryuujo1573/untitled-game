@@ -40,13 +40,15 @@ interface SliceDef {
 // Derived from the exact corner winding used below for each face case so
 // that TBN correctly maps the atlas _n texture to world/view space.
 // Face order follows BlockFaceTile: [+Y, -Y, +X, -X, +Z, -Z].
-const FACE_TBN: ReadonlyArray<readonly [number,number,number, number,number,number, number]> = [
-  [ 0, 1, 0,   1,  0,  0, -1], // 0: +Y
-  [ 0,-1, 0,   1,  0,  0,  1], // 1: -Y
-  [ 1, 0, 0,   0,  0,  1, -1], // 2: +X
-  [-1, 0, 0,   0,  0, -1, -1], // 3: -X
-  [ 0, 0, 1,   1,  0,  0,  1], // 4: +Z
-  [ 0, 0,-1,  -1,  0,  0,  1], // 5: -Z
+const FACE_TBN: ReadonlyArray<
+  readonly [number, number, number, number, number, number, number]
+> = [
+  [0, 1, 0, 1, 0, 0, -1], // 0: +Y
+  [0, -1, 0, 1, 0, 0, 1], // 1: -Y
+  [1, 0, 0, 0, 0, 1, -1], // 2: +X
+  [-1, 0, 0, 0, 0, -1, -1], // 3: -X
+  [0, 0, 1, 1, 0, 0, 1], // 4: +Z
+  [0, 0, -1, -1, 0, 0, 1], // 5: -Z
 ] as const;
 
 const SLICES: SliceDef[] = [
@@ -114,9 +116,9 @@ export interface ChunkMesh {
    * the atlas sprite across the entire merged quad using fract().
    * `light` is the per-face directional shading factor (0.5 bottom – 1.0 top).
    */
-  uvls:     Float32Array;
+  uvls: Float32Array;
   /** vec3 per vertex – object-space face normal (one of the 6 axis directions). */
-  normals:  Float32Array;
+  normals: Float32Array;
   /**
    * vec4 per vertex – tangent frame for normal mapping.
    *   xyz = object-space tangent direction (aligned with atlas U axis)
@@ -128,7 +130,7 @@ export interface ChunkMesh {
    *   x = skyLight  / 15  — how much sky light reaches this face
    *   y = blockLight / 15 — how much block-source light reaches this face
    */
-  lights:   Float32Array;
+  lights: Float32Array;
   vertexCount: number;
 }
 
@@ -185,7 +187,7 @@ export class Chunk {
    * Out-of-bounds → 15 (above world = open sky; below/side = no sky).
    */
   getSkyLight(x: number, y: number, z: number): number {
-    if (y >= N) return 15;  // above world = full sky
+    if (y >= N) return 15; // above world = full sky
     if (x < 0 || x >= N || y < 0 || z < 0 || z >= N) return 0;
     return this.skyLight[idx(x, y, z)];
   }
@@ -240,10 +242,10 @@ export class Chunk {
    */
   buildMesh(): ChunkMesh {
     const positions: number[] = [];
-    const uvls:      number[] = []; // 4 components per vertex: [localU, localV, tileIndex, light]
-    const normals:   number[] = []; // 3 components per vertex
-    const tangents:  number[] = []; // 4 components per vertex (xyz + bitangent sign)
-    const lights:    number[] = []; // 2 components per vertex: [skyL/15, blockL/15]
+    const uvls: number[] = []; // 4 components per vertex: [localU, localV, tileIndex, light]
+    const normals: number[] = []; // 3 components per vertex
+    const tangents: number[] = []; // 4 components per vertex (xyz + bitangent sign)
+    const lights: number[] = []; // 2 components per vertex: [skyL/15, blockL/15]
 
     // Reusable scratch arrays — allocated once to avoid per-slice GC pressure.
     //
@@ -279,11 +281,11 @@ export class Chunk {
             if (this.getBlock(nx, ny, nz) !== BlockType.Air) continue;
 
             // Sample light at the air-side neighbor block.
-            const skyL   = this.getSkyLight(nx, ny, nz);
+            const skyL = this.getSkyLight(nx, ny, nz);
             const blockL = this.getBlockLight(nx, ny, nz);
 
             const faceTiles = BlockFaceTile[block] ?? [3, 3, 3, 3, 3, 3];
-            const tileIdx   = faceTiles[faceIndex];
+            const tileIdx = faceTiles[faceIndex];
             mask[i + j * N] = tileIdx | (skyL << 4) | (blockL << 8);
           }
         }
@@ -320,9 +322,9 @@ export class Chunk {
               for (let di = 0; di < w; di++) used[i + di + (j + dj) * N] = 1;
 
             // Decode tile and light from the encoded mask value.
-            const tileIdx = encoded & 0xF;
-            const skyL    = (encoded >> 4) & 0xF;
-            const blockL  = (encoded >> 8) & 0xF;
+            const tileIdx = encoded & 0xf;
+            const skyL = (encoded >> 4) & 0xf;
+            const blockL = (encoded >> 8) & 0xf;
 
             // ── Emit the merged quad ──────────────────────────────
             // Face plane sits at sv on the slice axis.
@@ -397,7 +399,7 @@ export class Chunk {
 
             // Two triangles: (0,1,2) and (0,2,3).
             const tbn = FACE_TBN[faceIndex];
-            const skyN   = skyL   / 15;
+            const skyN = skyL / 15;
             const blockN = blockL / 15;
             for (const vi of [0, 1, 2, 0, 2, 3]) {
               const [pos, uv] = corners[vi];
@@ -414,10 +416,10 @@ export class Chunk {
 
     return {
       positions: new Float32Array(positions),
-      uvls:      new Float32Array(uvls),
-      normals:   new Float32Array(normals),
-      tangents:  new Float32Array(tangents),
-      lights:    new Float32Array(lights),
+      uvls: new Float32Array(uvls),
+      normals: new Float32Array(normals),
+      tangents: new Float32Array(tangents),
+      lights: new Float32Array(lights),
       vertexCount: positions.length / 3,
     };
   }
