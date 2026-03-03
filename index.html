@@ -7,8 +7,11 @@
     <title>Voxxer</title>
     <link rel="stylesheet" href="./src/style.css" />
   </head>
-  <body>
-    <canvas id="webglCanvas"></canvas>
+  <body class="bg-black overflow-hidden h-full w-full touch-none">
+    <canvas id="webglCanvas" tabindex="-1" contenteditable="false"></canvas>
+
+    <!-- Invisible Input to trap IME -->
+    <input type="text" id="ime-trap" style="position: absolute; opacity: 0; pointer-events: none; z-index: -1;" readonly />
 
     <!-- Crosshair (text-shadow applied via CSS rule) -->
     <div id="crosshair">+</div>
@@ -41,18 +44,6 @@
       &nbsp;·&nbsp; RMB place &nbsp;·&nbsp;
       <kbd class="kbd kbd-xs">E</kbd> cycle block &nbsp;·&nbsp;
       <kbd class="kbd kbd-xs">F3</kbd> debug
-    </div>
-
-    <!-- F3 debug overlay (hidden until F3 pressed) -->
-    <div
-      id="debug-panel"
-      class="fixed top-2 left-2 flex flex-row items-start gap-2.5 pointer-events-none select-none z-20"
-      style="display: none"
-    >
-      <pre
-        id="debug-text"
-        class="bg-black/60 text-[#e8e8e8] font-mono text-xs leading-[1.55] px-3 py-2 rounded-md whitespace-pre min-w-55"
-      ></pre>
     </div>
 
     <!-- Solid.js mount point for PauseMenu overlay -->

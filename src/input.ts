@@ -5,6 +5,9 @@ import { World } from "./world/world";
 import { BlockType } from "./world/block";
 import { raycast } from "./raycaster";
 import { PauseMenu } from "./pause-menu";
+import { InputBackend, isTauriRuntime } from "./input-backend";
+import { WebInputManager } from "./web-input";
+import { NativeInputManager } from "./native-input";
 
 /** Called after a block is placed or broken so the renderer can re-upload the chunk. */
 export type BlockEditCallback = (wx: number, wy: number, wz: number) => void;
@@ -55,19 +58,15 @@ export class InputManager {
   private physics: Physics;
   private world: World;
   private onBlockEdit: BlockEditCallback;
-  private pointerLocked = false;
+  private nativeMode = false;
+  private sensitivityMultiplier = 1.0;
   private pauseMenu!: PauseMenu;
   private placeTypeIndex = 0;
+  private inputBackend: InputBackend;
+
   get placeBlockType(): BlockType {
     return PLACE_CYCLE[this.placeTypeIndex];
   }
-  /**
-   * After (re-)acquiring pointer lock, skip this many mousemove events.
-   * Browsers queue up accumulated mouse deltas from while the window was
-   * unfocused and flush them the moment the pointer is locked again, causing
-   * a violent camera sweep.  Draining a few frames eliminates that burst.
-   */
-  private skipMouseEvents = 0;
 
   // Pre-allocated scratch vectors to avoid per-frame GC pressure.
   private wish = vec3.create();
@@ -88,18 +87,37 @@ export class InputManager {
     // Initialise hotbar display.
     updateHotbar(this.placeBlockType);
 
+    // Choose backend
+    if (isTauriRuntime()) {
+      this.nativeMode = true;
+      this.inputBackend = new NativeInputManager(canvas);
+      this.sensitivityMultiplier = 1.0;
+    } else {
+      this.inputBackend = new WebInputManager(canvas);
+      this.sensitivityMultiplier = 1.0;
+    }
+
+    // Cancel backend event subscriptions on page unload (HMR reloads, app close).
+    window.addEventListener("beforeunload", () => {
+      this.inputBackend.destroy?.();
+    });
+
     window.addEventListener("keydown", (e) => {
       this.keys.add(e.code);
       if (e.code === "Space") e.preventDefault();
-      // ESC: if pointer is locked the browser fires pointerlockchange first;
-      // that handler calls pauseMenu.pause(). If already unlocked, toggle.
+      // ESC: handle pause
       if (e.code === "Escape") {
         e.preventDefault();
-        if (!this.pointerLocked) this.pauseMenu.toggle();
+        if (this.inputBackend.isLocked()) {
+          this.inputBackend.unlock();
+          this.pauseMenu.pause();
+        } else {
+          this.pauseMenu.toggle();
+        }
         return;
       }
       // Cycle held block type with E.
-      if (e.code === "KeyE" && this.pointerLocked) {
+      if (e.code === "KeyE" && this.inputBackend.isLocked()) {
         this.placeTypeIndex = (this.placeTypeIndex + 1) % PLACE_CYCLE.length;
         updateHotbar(PLACE_CYCLE[this.placeTypeIndex]);
       }
@@ -110,8 +128,8 @@ export class InputManager {
     // Left-click: request pointer lock when not locked; break block when locked.
     // Right-click: place block when locked.
     canvas.addEventListener("mousedown", (e) => {
-      if (!this.pointerLocked) {
-        canvas.requestPointerLock();
+      if (!this.inputBackend.isLocked()) {
+        this.inputBackend.requestLock();
         return;
       }
       const hit = raycast(
@@ -138,37 +156,36 @@ export class InputManager {
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
     canvas.addEventListener("click", () => {
-      if (!this.pointerLocked) canvas.requestPointerLock();
+      if (!this.inputBackend.isLocked()) this.inputBackend.requestLock();
     });
 
+    // Handle standard pointer lock escape for pause menu
     document.addEventListener("pointerlockchange", () => {
-      const wasLocked = this.pointerLocked;
-      this.pointerLocked = document.pointerLockElement === canvas;
-
-      if (!this.pointerLocked) {
-        this.keys.clear();
-        // ESC from gameplay: show pause screen.
-        if (wasLocked && !this.pauseMenu.paused) this.pauseMenu.pause();
-      } else if (!wasLocked) {
-        // Just re-acquired lock – schedule skip of the next few mouse
-        // events to drain any queued delta burst from the OS.
-        this.skipMouseEvents = 5;
-      }
+        if (!document.pointerLockElement && !this.pauseMenu.paused && !this.nativeMode) {
+            this.keys.clear();
+            this.pauseMenu.pause();
+        }
     });
 
-    document.addEventListener("mousemove", (e) => {
-      if (!this.pointerLocked) return;
-      if (this.skipMouseEvents > 0) {
-        this.skipMouseEvents--;
-        return;
+    window.addEventListener("blur", () => {
+      this.keys.clear();
+      if (this.inputBackend.isLocked()) {
+        this.inputBackend.unlock();
       }
-      this.camera.rotate(e.movementX, e.movementY);
     });
+  }
+
+  /** Call this (e.g. from the pause menu resume callback) to re-acquire the cursor. */
+  requestLock(): void {
+    this.inputBackend.requestLock();
   }
 
   /** Call once per frame – feeds wish direction and jump into Physics. */
   update(): void {
     if (this.pauseMenu.paused) return;
+
+    // Use backend to update camera rotation
+    this.inputBackend.update(this.camera, this.sensitivityMultiplier);
 
     const fwd = this.camera.getFlatForward();
     const right = this.camera.getRight();
@@ -180,6 +197,33 @@ export class InputManager {
     if (this.keys.has("KeyD")) vec3.scaleAndAdd(this.wish, this.wish, right, 1);
     if (this.keys.has("KeyA"))
       vec3.scaleAndAdd(this.wish, this.wish, right, -1);
+
+    // Basic gamepad support: left stick for movement, right stick for look.
+    try {
+      const pads = navigator.getGamepads && navigator.getGamepads();
+      if (pads && pads.length) {
+        for (const p of pads) {
+          if (!p) continue;
+          const lx = p.axes[0] ?? 0;
+          const ly = p.axes[1] ?? 0;
+          const rx = p.axes[2] ?? 0;
+          const ry = p.axes[3] ?? 0;
+          // Deadzone
+          const dead = 0.15;
+          const apply = (v: number) => (Math.abs(v) > dead ? v : 0);
+          const ax = apply(lx);
+          const ay = apply(ly);
+          if (ax !== 0 || ay !== 0) {
+            vec3.scaleAndAdd(this.wish, this.wish, right, ax);
+            vec3.scaleAndAdd(this.wish, this.wish, fwd, -ay);
+          }
+          if (rx !== 0 || ry !== 0) {
+            const lookScale = 6.0; // tune how quickly gamepad looks
+            this.camera.rotate(rx * lookScale * this.sensitivityMultiplier, ry * lookScale * this.sensitivityMultiplier);
+          }
+        }
+      }
+    } catch {}
 
     // Normalise diagonal movement so it isn't faster than cardinal.
     if (vec3.length(this.wish) > 0) vec3.normalize(this.wish, this.wish);

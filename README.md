@@ -16,6 +16,43 @@ npm run dev      # start Vite dev server (opens localhost:5173)
 npm run build    # production build → dist/
 ```
 
+## Tauri 2 Desktop Wrapper
+
+This project is now wrapped with a **Tauri 2** app shell while keeping the
+existing Vite + frontend code in place (minimal relocation approach).
+
+### Prerequisites
+
+Follow the official Tauri 2 prerequisites for your OS:
+
+- https://v2.tauri.app/start/prerequisites/
+
+### Run as desktop app
+
+```bash
+bun install
+bun run tauri:dev
+```
+
+### Build desktop bundles
+
+```bash
+bun run tauri:build
+```
+
+### Project additions
+
+- `src-tauri/` Rust host app and Tauri config
+- `src-tauri/tauri.conf.json` with Vite hooks (`beforeDevCommand`,
+  `beforeBuildCommand`, `devUrl`, `frontendDist`)
+- `src-tauri/capabilities/default.json` permissions for `dialog` + `fs`
+
+### Notes
+
+- Vite config follows official Tauri guidance for fixed dev port, strict port,
+  `TAURI_DEV_HOST`, HMR settings, and `src-tauri` watch ignore.
+- Existing web entrypoints and source layout stay unchanged.
+
 ## Tech Stack
 
 | Tool           | Purpose                                   |

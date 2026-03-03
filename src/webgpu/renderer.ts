@@ -536,7 +536,7 @@ export class WebGPURenderer implements IRenderer {
     world.generate(4);
 
     const physics   = new Physics(camera, world);
-    const pauseMenu = new PauseMenu(() => canvas.requestPointerLock());
+    const pauseMenu = new PauseMenu(() => input.requestLock());
     pauseMenu.mount(document.getElementById("pause-root")!);
 
     const debug = new DebugOverlay(null);

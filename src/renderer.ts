@@ -1,18 +1,19 @@
-import Time from "./time-manager";
 import { mat4 } from "gl-matrix";
-import ShaderUtilites from "./renderer-utils";
-import Materials from "./shader-materials";
+
+import { createAtlasTexture } from "./atlas";
 import { Camera } from "./camera";
-import { InputManager } from "./input";
-import { Physics } from "./physics";
-import { World } from "./world/world";
-import { Chunk, CHUNK_SIZE } from "./world/chunk";
 import { DebugOverlay } from "./debug";
 import { Frustum } from "./frustum";
-import { createAtlasTexture } from "./atlas";
+import { InputManager } from "./input";
+import { PauseMenu } from "./pause-menu";
+import { Physics } from "./physics";
 import { raycast, RayHit } from "./raycaster";
+import ShaderUtilites from "./renderer-utils";
 import { Settings } from "./settings";
-import { PauseMenu } from "./pause-menu.tsx";
+import Materials from "./shader-materials";
+import Time from "./time-manager";
+import { Chunk, CHUNK_SIZE } from "./world/chunk";
+import { World } from "./world/world";
 
 /**
  * Uploads a chunk's mesh to GPU buffers so it can be drawn each frame.
@@ -241,7 +242,7 @@ async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
   world.generate(4); // 4×4 chunks = 64×64 blocks
 
   const physics = new Physics(camera, world);
-  const pauseMenu = new PauseMenu(() => canvas.requestPointerLock());
+  const pauseMenu = new PauseMenu(() => input.requestLock());
   pauseMenu.mount(document.getElementById("pause-root")!);
   const input = new InputManager(
     canvas,

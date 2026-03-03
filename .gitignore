@@ -12,7 +12,6 @@ build/
 
 # Ignore log files
 *.log
-.,
 # Ignore editor-specific files
 .vscode/
 .idea/
@@ -31,6 +30,10 @@ yarn.lock
 
 # Ignore .DS_Store files on macOS
 .DS_Store
+
+# Tauri / Rust
+target/
+gen/
 
 # Ignore Thumbs.db files on Windows
 Thumbs.db

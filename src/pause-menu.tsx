@@ -136,9 +136,6 @@ function PauseOverlay(props: { menu: PauseMenu }) {
           "scene-bright": isBright(),
         }}
         style={{ transition: "background-color 1200ms ease" }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) props.menu.resume();
-        }}
       >
         {/* ── Main pause panel ─────────────────────────── */}
         <Show when={panel() === "pause"}>
