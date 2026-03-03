@@ -39,6 +39,14 @@ class Time {
     return 1 / Time.deltaTime;
   }
 
+  static getWorldTime(): number {
+    return this.worldTime;
+  }
+
+  static setWorldTime(value: number): void {
+    this.worldTime = ((value % 1) + 1) % 1;
+  }
+
   // Instance method Example for static classes
   instanceMethod(): void {
     console.log(Time.CalculateTimeVariables()); // Accessing static property

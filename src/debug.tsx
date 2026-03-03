@@ -326,6 +326,9 @@ export class DebugOverlay {
   private readonly visible: () => boolean;
   private readonly setState: (s: DebugState) => void;
   private readonly state: () => DebugState;
+  private readonly disposeUI: () => void;
+  private readonly onKeyDown: (e: KeyboardEvent) => void;
+  private readonly root: HTMLDivElement;
 
   constructor(gl: WebGL2RenderingContext | null) {
     this.compass = document.getElementById(
@@ -374,9 +377,13 @@ export class DebugOverlay {
     this.setState = setState;
 
     // Render the UI once
-    render(
+    this.root = document.createElement("div");
+    this.root.id = "debug-root";
+    document.body.appendChild(this.root);
+
+    this.disposeUI = render(
       () => <DebugUI state={this.state()} visible={this.visible()} />,
-      document.body,
+      this.root,
     );
 
     // ── One-time system / environment snapshot ──────────────────
@@ -423,7 +430,7 @@ export class DebugOverlay {
       },
     });
 
-    window.addEventListener("keydown", (e) => {
+    this.onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "F3") {
         e.preventDefault();
         const v = !this.visible();
@@ -431,7 +438,8 @@ export class DebugOverlay {
         this.compass.style.display = v ? "block" : "none";
         this.crosshair.style.display = v ? "none" : "";
       }
-    });
+    };
+    window.addEventListener("keydown", this.onKeyDown);
   }
 
   update(camera: Camera, world: World, stats: RenderStats): void {
@@ -582,5 +590,11 @@ export class DebugOverlay {
     ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = "#fff";
     ctx.fill();
+  }
+
+  destroy(): void {
+    window.removeEventListener("keydown", this.onKeyDown);
+    this.disposeUI();
+    this.root.remove();
   }
 }

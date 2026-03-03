@@ -130,4 +130,21 @@ export class Physics {
     }
     return false;
   }
+
+  getState(): { velocity: [number, number, number]; onGround: boolean } {
+    return {
+      velocity: [this.velocity[0], this.velocity[1], this.velocity[2]],
+      onGround: this.onGround,
+    };
+  }
+
+  setState(state: { velocity: [number, number, number]; onGround: boolean }): void {
+    this.velocity[0] = state.velocity[0];
+    this.velocity[1] = state.velocity[1];
+    this.velocity[2] = state.velocity[2];
+    this.onGround = state.onGround;
+    this.feet[0] = this.camera.position[0];
+    this.feet[1] = this.camera.position[1] - EYE_HEIGHT;
+    this.feet[2] = this.camera.position[2];
+  }
 }

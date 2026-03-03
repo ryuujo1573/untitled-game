@@ -125,6 +125,12 @@ export interface ChunkMesh {
   vertexCount: number;
 }
 
+export interface ChunkSnapshot {
+  cx: number;
+  cz: number;
+  blocks: Uint8Array;
+}
+
 export class Chunk {
   /** Block IDs stored in a flat array of length 4096. */
   blocks = new Uint8Array(TOTAL);
@@ -151,6 +157,25 @@ export class Chunk {
 
   setBlock(x: number, y: number, z: number, type: BlockType): void {
     this.blocks[idx(x, y, z)] = type;
+  }
+
+  toSnapshot(): ChunkSnapshot {
+    return {
+      cx: this.cx,
+      cz: this.cz,
+      blocks: new Uint8Array(this.blocks),
+    };
+  }
+
+  static fromSnapshot(snapshot: ChunkSnapshot): Chunk {
+    const chunk = new Chunk(snapshot.cx, snapshot.cz);
+    if (snapshot.blocks.length !== TOTAL) {
+      throw new Error(
+        `Invalid chunk snapshot size: expected ${TOTAL}, got ${snapshot.blocks.length}`,
+      );
+    }
+    chunk.blocks.set(snapshot.blocks);
+    return chunk;
   }
 
   /**

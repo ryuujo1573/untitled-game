@@ -1,11 +1,16 @@
-/**
- * IRenderer — thin abstraction that lets main.ts pick between
- * the WebGL2 and WebGPU backends without coupling to either.
- *
- * Both backends are self-contained: they own the game loop, camera,
- * world, physics, and input.  The only surface is `start()`.
- */
+import type { GameSaveV1 } from "~/game/session-types";
+import type { QuitToTitleIntent } from "~/pause-menu";
+
 export interface IRenderer {
   /** Initialise GPU resources and begin the RAF render loop. */
-  start(): Promise<void>;
+  startSession(
+    initialSave: GameSaveV1,
+    hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+  ): Promise<void>;
+
+  /** Capture a complete save snapshot from the live session. */
+  captureSession(): GameSaveV1;
+
+  /** Stop rendering and release event listeners/resources. */
+  destroy(): void;
 }

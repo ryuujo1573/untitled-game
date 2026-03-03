@@ -20,6 +20,12 @@
         },
         {
           "path": "$DOWNLOAD/**/*"
+        },
+        {
+          "path": "$APPDATA/**/*"
+        },
+        {
+          "path": "$RESOURCE/**/*"
         }
       ]
     },
@@ -40,6 +46,9 @@
         },
         {
           "path": "$DOWNLOAD/**/*"
+        },
+        {
+          "path": "$RESOURCE/**/*"
         }
       ]
     }

@@ -63,6 +63,7 @@ export class InputManager {
   private pauseMenu!: PauseMenu;
   private placeTypeIndex = 0;
   private inputBackend: InputBackend;
+  private readonly disposers: Array<() => void> = [];
 
   get placeBlockType(): BlockType {
     return PLACE_CYCLE[this.placeTypeIndex];
@@ -98,11 +99,15 @@ export class InputManager {
     }
 
     // Cancel backend event subscriptions on page unload (HMR reloads, app close).
-    window.addEventListener("beforeunload", () => {
+    const onBeforeUnload = () => {
       this.inputBackend.destroy?.();
-    });
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    this.disposers.push(() =>
+      window.removeEventListener("beforeunload", onBeforeUnload),
+    );
 
-    window.addEventListener("keydown", (e) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       this.keys.add(e.code);
       if (e.code === "Space") e.preventDefault();
       // ESC: handle pause
@@ -121,12 +126,16 @@ export class InputManager {
         this.placeTypeIndex = (this.placeTypeIndex + 1) % PLACE_CYCLE.length;
         updateHotbar(PLACE_CYCLE[this.placeTypeIndex]);
       }
-    });
-    window.addEventListener("keyup", (e) => this.keys.delete(e.code));
+    };
+    const onKeyUp = (e: KeyboardEvent) => this.keys.delete(e.code);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    this.disposers.push(() => window.removeEventListener("keydown", onKeyDown));
+    this.disposers.push(() => window.removeEventListener("keyup", onKeyUp));
 
     // Left-click: request pointer lock when not locked; break block when locked.
     // Right-click: place block when locked.
-    canvas.addEventListener("mousedown", (e) => {
+    const onMouseDown = (e: MouseEvent) => {
       if (!this.inputBackend.isLocked()) {
         this.inputBackend.requestLock();
         return;
@@ -150,23 +159,35 @@ export class InputManager {
         if (!this.world.setBlock(px, py, pz, this.placeBlockType)) return;
         this.onBlockEdit(px, py, pz);
       }
-    });
+    };
+    canvas.addEventListener("mousedown", onMouseDown);
+    this.disposers.push(() => canvas.removeEventListener("mousedown", onMouseDown));
     // Suppress right-click context menu.
-    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+    canvas.addEventListener("contextmenu", onContextMenu);
+    this.disposers.push(() =>
+      canvas.removeEventListener("contextmenu", onContextMenu),
+    );
 
-    canvas.addEventListener("click", () => {
+    const onClick = () => {
       if (!this.inputBackend.isLocked()) this.inputBackend.requestLock();
-    });
+    };
+    canvas.addEventListener("click", onClick);
+    this.disposers.push(() => canvas.removeEventListener("click", onClick));
 
     // Handle standard pointer lock escape for pause menu
-    document.addEventListener("pointerlockchange", () => {
+    const onPointerLockChange = () => {
         if (!document.pointerLockElement && !this.pauseMenu.paused && !this.nativeMode) {
             this.keys.clear();
             this.pauseMenu.pause();
         }
-    });
+    };
+    document.addEventListener("pointerlockchange", onPointerLockChange);
+    this.disposers.push(() =>
+      document.removeEventListener("pointerlockchange", onPointerLockChange),
+    );
 
-    window.addEventListener("blur", () => {
+    const onBlur = () => {
       this.keys.clear();
       if (this.inputBackend.isLocked()) {
         this.inputBackend.unlock();
@@ -174,7 +195,9 @@ export class InputManager {
       if (!this.pauseMenu.paused) {
         this.pauseMenu.pause();
       }
-    });
+    };
+    window.addEventListener("blur", onBlur);
+    this.disposers.push(() => window.removeEventListener("blur", onBlur));
   }
 
   /** Call this (e.g. from the pause menu resume callback) to re-acquire the cursor. */
@@ -234,5 +257,19 @@ export class InputManager {
     if (this.keys.has("Space")) this.physics.jump();
 
     this.physics.update(this.wish[0], this.wish[2]);
+  }
+
+  setSelectedBlockType(type: BlockType): void {
+    const index = PLACE_CYCLE.indexOf(type);
+    if (index === -1) return;
+    this.placeTypeIndex = index;
+    updateHotbar(type);
+  }
+
+  destroy(): void {
+    this.disposers.forEach((dispose) => dispose());
+    this.disposers.length = 0;
+    this.inputBackend.unlock();
+    this.inputBackend.destroy?.();
   }
 }

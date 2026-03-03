@@ -1,7 +1,8 @@
 export type ShaderpackSource =
   | { kind: "folder"; path: string }
   | { kind: "zip"; path: string }
-  | { kind: "browser-files"; files: File[] };
+  | { kind: "browser-files"; files: File[]; name?: string }
+  | { kind: "vfs"; name: string };
 
 export const STAGE_NAMES = [
   "shadow",

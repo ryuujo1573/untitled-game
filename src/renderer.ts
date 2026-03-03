@@ -5,7 +5,8 @@ import { Camera } from "./camera";
 import { DebugOverlay } from "./debug";
 import { Frustum } from "./frustum";
 import { InputManager } from "./input";
-import { PauseMenu } from "./pause-menu";
+import { PauseMenu, type QuitToTitleIntent } from "./pause-menu";
+import { mountDropOverlay } from "./drop-overlay";
 import { Physics } from "./physics";
 import { raycast, RayHit } from "./raycaster";
 import ShaderUtilites from "./renderer-utils";
@@ -14,6 +15,9 @@ import Materials from "./shader-materials";
 import Time from "./time-manager";
 import { Chunk, CHUNK_SIZE } from "./world/chunk";
 import { World } from "./world/world";
+import type { IRenderer } from "./renderer-interface";
+import type { GameSaveV1 } from "./game/session-types";
+import { captureFromRuntime, hydrateRuntime } from "./game/session-codec";
 
 /**
  * Uploads a chunk's mesh to GPU buffers so it can be drawn each frame.
@@ -94,7 +98,16 @@ function createWireCube(gl: WebGL2RenderingContext): {
   return { buf, count: v.length / 3 }; // 24
 }
 
-async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
+interface WebGLSessionHandle {
+  captureSession(): GameSaveV1;
+  destroy(): void;
+}
+
+async function startWebGLSession(
+  gl: WebGL2RenderingContext,
+  initialSave: GameSaveV1,
+  hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+): Promise<WebGLSessionHandle> {
   // ── Render state ────────────────────────────────────────
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.enable(gl.CULL_FACE);
@@ -117,8 +130,7 @@ async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
     Materials.Voxel.fragmentShader,
   );
   if (!program) {
-    console.error("Failed to compile voxel shader");
-    return;
+    throw new Error("Failed to compile voxel shader");
   }
   gl.useProgram(program);
 
@@ -238,12 +250,14 @@ async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
   // ── Camera & input ──────────────────────────────────────
   const canvas = gl.canvas as HTMLCanvasElement;
   const camera = new Camera();
-  const world = new World();
-  world.generate(4); // 4×4 chunks = 64×64 blocks
-
+  const world = World.fromSnapshot(initialSave.world);
   const physics = new Physics(camera, world);
-  const pauseMenu = new PauseMenu(() => input.requestLock());
+  const pauseMenu = new PauseMenu(
+    () => input.requestLock(),
+    (intent) => hooks.onQuitRequested(intent),
+  );
   pauseMenu.mount(document.getElementById("pause-root")!);
+  const disposeDropOverlay = mountDropOverlay(document.getElementById("pause-root")!);
   const input = new InputManager(
     canvas,
     camera,
@@ -252,6 +266,7 @@ async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
     (wx, wy, wz) => rebuildChunk(gl, world, wx, wy, wz),
     pauseMenu,
   );
+  hydrateRuntime(initialSave, { world, camera, physics, input });
   const debug = new DebugOverlay(gl);
 
   // ── Block-selection outline ─────────────────────────────────
@@ -300,9 +315,12 @@ async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
   let lastOutlineHit: RayHit | null = null;
   let outlineAlpha = 0.0;
   const OUTLINE_FADE_SPEED = 5.0; // alpha units per second → 0.2 s fade
+  let running = true;
+  let rafId = 0;
 
   function frame() {
-    requestAnimationFrame(frame);
+    if (!running) return;
+    rafId = requestAnimationFrame(frame);
     Time.CalculateTimeVariables();
     input.update();
 
@@ -503,6 +521,54 @@ async function EngineRenderer(gl: WebGL2RenderingContext): Promise<void> {
   }
 
   frame();
+
+  return {
+    captureSession(): GameSaveV1 {
+      const snapshot = captureFromRuntime(
+        { world, camera, physics, input },
+        {
+          id: initialSave.id,
+          name: initialSave.name,
+          createdAtMs: initialSave.createdAtMs,
+        },
+      );
+      return snapshot;
+    },
+    destroy(): void {
+      running = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", resize);
+      input.destroy();
+      pauseMenu.destroy();
+      disposeDropOverlay();
+      debug.destroy();
+      destroyHDRFbo();
+    },
+  };
 }
 
-export { EngineRenderer };
+export class WebGLRenderer implements IRenderer {
+  private readonly gl: WebGL2RenderingContext;
+  private session: WebGLSessionHandle | null = null;
+
+  constructor(gl: WebGL2RenderingContext) {
+    this.gl = gl;
+  }
+
+  async startSession(
+    initialSave: GameSaveV1,
+    hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+  ): Promise<void> {
+    this.session = await startWebGLSession(this.gl, initialSave, hooks);
+  }
+
+  captureSession(): GameSaveV1 {
+    if (!this.session) throw new Error("No active WebGL session");
+    return this.session.captureSession();
+  }
+
+  destroy(): void {
+    this.session?.destroy();
+    this.session = null;
+  }
+}

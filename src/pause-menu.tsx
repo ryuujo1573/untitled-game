@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onCleanup, Show, For } from "solid-js";
 import { render } from "solid-js/web";
-import { ChevronLeft } from "lucide-solid";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-solid";
 import { Settings } from "~/settings";
 import {
   getShaderpackStateSnapshot,
@@ -11,42 +11,55 @@ import {
   unloadShaderpack,
 } from "~/shaderpack/runtime";
 import {
-  getLibraryPath,
   loadPackFromLibrary,
-  pickLibraryDirectory,
   scanLibrary,
 } from "~/shaderpack/library";
+import { extractZipToVirtualFiles } from "~/shaderpack/zip";
 
 // ── Constants ──────────────────────────────────────────────────
-/** Slider values (0–200) that the brightness bar snaps to. */
 const SNAP_POINTS = [0, 25, 50, 75, 100, 125, 150, 175, 200];
-/** How close (in slider units) the thumb must be before it snaps. */
 const SNAP_THRESHOLD = 8;
 
 // ── Shared reactive state (readable from outside Solid) ───────
 const [paused, setPaused] = createSignal(false);
-const [panel, setPanel] = createSignal<"pause" | "settings">("pause");
+const [panel, setPanel] = createSignal<"pause" | "settings" | "shaderpacks">("pause");
+const [quitConfirmOpen, setQuitConfirmOpen] = createSignal(false);
 
-/**
- * Scene luminance [0-255] sampled from the WebGL canvas each frame while
- * paused.  Drives the adaptive overlay/row tint.
- */
 const [sceneLuma, setSceneLuma] = createSignal(0);
 
-/** Called by the renderer each frame while paused. */
+/** Pack name to visually highlight (set by drag-drop). Auto-clears. */
+const [highlightedPack, setHighlightedPackRaw] = createSignal<string | null>(null);
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function setHighlightedPack(name: string): void {
+  clearTimeout(highlightTimer);
+  setHighlightedPackRaw(name);
+  highlightTimer = setTimeout(() => setHighlightedPackRaw(null), 3000);
+}
+
 export function updateSceneLuma(luma: number): void {
   setSceneLuma(luma);
 }
 
-/**
- * Public controller – same shape that InputManager already uses.
- * Created once; the Solid component tree reads the signals it exposes.
- */
+/** Navigate directly into the shaderpacks panel (used by drag-drop overlay). */
+export function navigateToShaderpacks(): void {
+  setPaused(true);
+  setPanel("shaderpacks");
+}
+
+export type QuitToTitleIntent = "save" | "discard" | "cancel";
+
 export class PauseMenu {
   private readonly onResume: () => void;
+  private readonly onQuitRequested: (intent: QuitToTitleIntent) => void;
+  private disposeUI: (() => void) | null = null;
 
-  constructor(onResume: () => void) {
+  constructor(
+    onResume: () => void,
+    onQuitRequested: (intent: QuitToTitleIntent) => void,
+  ) {
     this.onResume = onResume;
+    this.onQuitRequested = onQuitRequested;
   }
 
   get paused(): boolean {
@@ -60,7 +73,8 @@ export class PauseMenu {
 
   pause(): void {
     setPaused(true);
-    setPanel("pause"); // always reset to main panel
+    setPanel("pause");
+    setQuitConfirmOpen(false);
   }
 
   resume(): void {
@@ -68,9 +82,28 @@ export class PauseMenu {
     this.onResume();
   }
 
-  /** Mount the Solid component tree into the given container. */
   mount(container: HTMLElement): void {
-    render(() => <PauseOverlay menu={this} />, container);
+    this.disposeUI = render(() => <PauseOverlay menu={this} />, container);
+  }
+
+  openQuitConfirm(): void {
+    setQuitConfirmOpen(true);
+  }
+
+  submitQuitIntent(intent: QuitToTitleIntent): void {
+    if (intent === "cancel") {
+      setQuitConfirmOpen(false);
+      this.onQuitRequested(intent);
+      return;
+    }
+    setQuitConfirmOpen(false);
+    setPaused(false);
+    this.onQuitRequested(intent);
+  }
+
+  destroy(): void {
+    this.disposeUI?.();
+    this.disposeUI = null;
   }
 }
 
@@ -85,36 +118,40 @@ function PauseOverlay(props: { menu: PauseMenu }) {
 
   // ── HDR state ───────────────────────────────────────────────
   const [hdr, setHdr] = createSignal(Settings.hdr);
+
+  // ── Shaderpack state ────────────────────────────────────────
   const [shaderpackStatus, setShaderpackStatus] = createSignal("No shaderpack loaded");
+  const [activePackName, setActivePackName] = createSignal<string | null>(null);
   const [shaderpackError, setShaderpackError] = createSignal<string | null>(null);
 
-  const [libraryPath, setLibraryPath] = createSignal<string | null>(getLibraryPath());
+  // ── Library state (VFS-backed) ──────────────────────────────
   const [libraryPacks, setLibraryPacks] = createSignal<string[]>([]);
-  const [libraryError, setLibraryError] = createSignal<string | null>(null);
   const [libraryScanning, setLibraryScanning] = createSignal(false);
+  const [libraryError, setLibraryError] = createSignal<string | null>(null);
 
-  let folderInputRef: HTMLInputElement | undefined;
   let zipInputRef: HTMLInputElement | undefined;
+  let folderInputRef: HTMLInputElement | undefined;
 
   const refreshShaderpackStatus = () => {
     const snapshot = getShaderpackStateSnapshot();
     const active = snapshot.active;
     if (!active) {
       setShaderpackStatus("No shaderpack loaded");
+      setActivePackName(null);
       return;
     }
     const overrides = snapshot.stageStatuses.filter((s) => s.mode === "override").length;
     const total = snapshot.stageStatuses.length;
-    setShaderpackStatus(`${active.name} (${overrides}/${total} overrides)`);
+    setShaderpackStatus(`${active.name} (${overrides}/${total})`);
+    setActivePackName(active.name);
   };
 
-  // ── Adaptive tint: true when the rendered scene behind the overlay is bright
   const isBright = () => sceneLuma() > 160;
 
   // ── Alt-key tracking ────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== "Alt") return;
-    if (panel() === "settings") e.preventDefault();
+    if (panel() !== "pause") e.preventDefault();
     setAltPressed(true);
     setShowSnapHint(false);
   };
@@ -134,6 +171,27 @@ function PauseOverlay(props: { menu: PauseMenu }) {
     unsubShaderpack();
   });
 
+  // ── Library scan ────────────────────────────────────────────
+  const doScanLibrary = async () => {
+    setLibraryScanning(true);
+    setLibraryError(null);
+    try {
+      setLibraryPacks(await scanLibrary());
+    } catch (e) {
+      setLibraryError(e instanceof Error ? e.message : String(e));
+      setLibraryPacks([]);
+    } finally {
+      setLibraryScanning(false);
+    }
+  };
+
+  // Scan when shaderpacks panel opens.
+  createEffect(() => {
+    if (panel() === "shaderpacks") {
+      doScanLibrary().catch(() => {});
+    }
+  });
+
   // ── Slider input handler ────────────────────────────────────
   const onSliderInput = (e: InputEvent) => {
     const raw = Number((e.currentTarget as HTMLInputElement).value);
@@ -145,7 +203,6 @@ function PauseOverlay(props: { menu: PauseMenu }) {
       );
       if (Math.abs(nearest - raw) <= SNAP_THRESHOLD) {
         v = nearest;
-        // Visually snap the thumb.
         (e.currentTarget as HTMLInputElement).value = String(v);
         setShowSnapHint(true);
       } else {
@@ -160,45 +217,12 @@ function PauseOverlay(props: { menu: PauseMenu }) {
     Settings.save();
   };
 
-  // ── Persist HDR changes ─────────────────────────────────────
   createEffect(() => {
     Settings.hdr = hdr();
     Settings.save();
   });
 
-  // ── Library scan: run whenever the settings panel opens with a path set ──
-  const doScanLibrary = async () => {
-    setLibraryScanning(true);
-    setLibraryError(null);
-    try {
-      setLibraryPacks(await scanLibrary());
-    } catch (e) {
-      setLibraryError(e instanceof Error ? e.message : String(e));
-      setLibraryPacks([]);
-    } finally {
-      setLibraryScanning(false);
-    }
-  };
-
-  createEffect(() => {
-    if (panel() === "settings" && libraryPath()) {
-      doScanLibrary().catch(() => {});
-    }
-  });
-
-  const onPickLibrary = async () => {
-    setLibraryError(null);
-    try {
-      const chosen = await pickLibraryDirectory();
-      if (chosen) {
-        setLibraryPath(chosen);
-        await doScanLibrary();
-      }
-    } catch (e) {
-      setLibraryError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
+  // ── Shaderpack handlers ─────────────────────────────────────
   const onLoadFromLibrary = async (name: string) => {
     setShaderpackError(null);
     try {
@@ -208,27 +232,31 @@ function PauseOverlay(props: { menu: PauseMenu }) {
     }
   };
 
-  const onLoadFolder = async () => {
+  const onAddFolder = async () => {
     setShaderpackError(null);
     try {
       if (import.meta.isTauri) {
         await pickAndLoadShaderpackFolder();
       } else {
         folderInputRef?.click();
+        return; // web flow continues in onWebFolderPicked
       }
+      await doScanLibrary().catch(() => {});
     } catch (e) {
       setShaderpackError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const onLoadZip = async () => {
+  const onAddZip = async () => {
     setShaderpackError(null);
     try {
       if (import.meta.isTauri) {
         await pickAndLoadShaderpackZip();
       } else {
         zipInputRef?.click();
+        return; // web flow continues in onWebZipPicked
       }
+      await doScanLibrary().catch(() => {});
     } catch (e) {
       setShaderpackError(e instanceof Error ? e.message : String(e));
     }
@@ -245,23 +273,45 @@ function PauseOverlay(props: { menu: PauseMenu }) {
     if (!files || files.length === 0) return;
     await loadShaderpack({ kind: "browser-files", files: Array.from(files) });
     input.value = "";
+    // Refresh library after adding via file picker (now persisted in VFS).
+    await doScanLibrary().catch(() => {});
   };
 
   const onWebZipPicked = async (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
-    const files = input.files;
-    if (!files || files.length === 0) return;
-    // Browser ZIP parsing is not implemented yet; this still routes through the
-    // same runtime path so users get a clear diagnostic.
-    await loadShaderpack({ kind: "browser-files", files: Array.from(files) });
+    const fileList = input.files;
+    if (!fileList || fileList.length === 0) return;
+    const file = fileList[0];
+    if (file.name.toLowerCase().endsWith(".zip")) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const { files } = await extractZipToVirtualFiles(bytes);
+      if (files.size > 0) {
+        // Convert extracted map into File[] with webkitRelativePath set.
+        const synthFiles: File[] = [];
+        for (const [path, content] of files) {
+          const f = new File([content], path.split("/").pop() ?? "file", { type: "text/plain" });
+          Object.defineProperty(f, "webkitRelativePath", { value: path });
+          synthFiles.push(f);
+        }
+        const packName = file.name.replace(/\.zip$/i, "") || "shaderpack";
+        await loadShaderpack({ kind: "browser-files", files: synthFiles, name: packName });
+      }
+    } else {
+      await loadShaderpack({ kind: "browser-files", files: Array.from(fileList) });
+    }
     input.value = "";
+    await doScanLibrary().catch(() => {});
   };
 
   const onWebPickerError = (e: unknown) => {
     setShaderpackError(e instanceof Error ? e.message : String(e));
   };
 
-  // ── Template ────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────
+  // Whether we're in the settings↔shaderpacks sliding area.
+  const inSettingsArea = () => panel() === "settings" || panel() === "shaderpacks";
+
+  // ── Template ──────────────────────────────────────────────
   return (
     <Show when={paused()}>
       <div
@@ -273,7 +323,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
         }}
         style={{ transition: "background-color 1200ms ease" }}
       >
-        {/* ── Main pause panel ─────────────────────────── */}
+        {/* ── Main pause panel ───────────────────────── */}
         <Show when={panel() === "pause"}>
           <div class="flex flex-col items-center gap-4 w-72">
             <h1 class="text-white font-bold text-3xl tracking-wide mb-2 drop-shadow">
@@ -293,215 +343,303 @@ function PauseOverlay(props: { menu: PauseMenu }) {
             </button>
             <button
               class="btn btn-soft btn-error w-full text-base"
-              onClick={() => location.reload()}
+              onClick={() => props.menu.openQuitConfirm()}
             >
               Quit to title
             </button>
           </div>
         </Show>
 
-        {/* ── Settings sub-panel ───────────────────────── */}
-        <Show when={panel() === "settings"}>
-          <div class="flex flex-col gap-6 w-80">
-            {/* Header */}
-            <div class="flex items-center gap-3 mb-1">
-              <button
-                class="flex items-center gap-1 text-white/50 hover:text-white/90 text-sm transition-colors duration-150 cursor-pointer"
-                onClick={() => setPanel("pause")}
-              >
-                <ChevronLeft size={18} stroke-width={2} />
-                <span>Back</span>
-              </button>
-              <h2 class="text-white font-bold text-2xl tracking-wide">
-                Settings
-              </h2>
-            </div>
-
-            {/* Brightness */}
-            <div class="setting-row">
-              <div class="flex justify-between text-white/90 text-sm font-mono mb-1.5">
-                <span>Brightness</span>
-                <span>{brightness()}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="200"
-                step="1"
-                value={brightness()}
-                class="range range-primary w-full"
-                onInput={onSliderInput}
-                onPointerDown={() => setDragging(true)}
-                onPointerUp={() => {
-                  setDragging(false);
-                  setShowSnapHint(false);
-                }}
-              />
-              <div class="flex justify-between text-white/40 text-xs mt-0.5">
-                <span>Dark</span>
-                <span>Normal</span>
-                <span>Bright</span>
-              </div>
-              <p
-                class="text-white/35 text-xs text-center mt-1.5 select-none transition-opacity duration-150"
-                classList={{ "opacity-0": !showSnapHint() || !dragging() }}
-              >
-                Hold <kbd class="kbd kbd-xs">Alt</kbd> to drag freely without
-                snapping
+        <Show when={quitConfirmOpen()}>
+          <div class="absolute inset-0 bg-black/70 flex items-center justify-center px-4">
+            <div class="w-full max-w-sm rounded-lg border border-white/15 bg-zinc-900/95 p-4">
+              <h3 class="text-white text-lg font-bold">Quit to title</h3>
+              <p class="text-white/70 text-sm mt-1">
+                Save this world before leaving gameplay?
               </p>
+              <div class="mt-4 grid grid-cols-3 gap-2">
+                <button
+                  class="btn btn-primary btn-sm"
+                  onClick={() => props.menu.submitQuitIntent("save")}
+                >
+                  Save
+                </button>
+                <button
+                  class="btn btn-soft btn-warning btn-sm"
+                  onClick={() => props.menu.submitQuitIntent("discard")}
+                >
+                  Discard
+                </button>
+                <button
+                  class="btn btn-soft btn-secondary btn-sm"
+                  onClick={() => props.menu.submitQuitIntent("cancel")}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
+          </div>
+        </Show>
 
-            {/* HDR */}
-            <div class="setting-row">
-              <label
-                class="flex items-center justify-between text-white/90 text-sm font-mono select-none"
-                classList={{
-                  "cursor-pointer": Settings.hdrSupported,
-                  "opacity-50 cursor-not-allowed": !Settings.hdrSupported,
-                }}
-              >
-                <span class="flex flex-col gap-0.5">
-                  <span>HDR Rendering</span>
-                  <Show when={!Settings.hdrSupported}>
-                    <span class="text-white/40 text-xs">
-                      Not supported by this device
+        {/* ── Settings ↔ Shaderpacks sliding area ──── */}
+        <Show when={inSettingsArea()}>
+          <div class="overflow-hidden w-80">
+            <div
+              class="flex transition-transform duration-300 ease-out"
+              style={{
+                transform: panel() === "shaderpacks" ? "translateX(-100%)" : "translateX(0)",
+              }}
+            >
+              {/* ─── Settings panel (left) ─────────── */}
+              <div class="w-80 shrink-0 flex flex-col gap-6">
+                {/* Header */}
+                <div class="flex items-center gap-3 mb-1">
+                  <button
+                    class="flex items-center gap-1 text-white/50 hover:text-white/90 text-sm transition-colors duration-150 cursor-pointer"
+                    onClick={() => setPanel("pause")}
+                  >
+                    <ChevronLeft size={18} stroke-width={2} />
+                    <span>Back</span>
+                  </button>
+                  <h2 class="text-white font-bold text-2xl tracking-wide">
+                    Settings
+                  </h2>
+                </div>
+
+                {/* Brightness */}
+                <div class="setting-row">
+                  <div class="flex justify-between text-white/90 text-sm font-mono mb-1.5">
+                    <span>Brightness</span>
+                    <span>{brightness()}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="200"
+                    step="1"
+                    value={brightness()}
+                    class="range range-primary w-full"
+                    onInput={onSliderInput}
+                    onPointerDown={() => setDragging(true)}
+                    onPointerUp={() => {
+                      setDragging(false);
+                      setShowSnapHint(false);
+                    }}
+                  />
+                  <div class="flex justify-between text-white/40 text-xs mt-0.5">
+                    <span>Dark</span>
+                    <span>Normal</span>
+                    <span>Bright</span>
+                  </div>
+                  <p
+                    class="text-white/35 text-xs text-center mt-1.5 select-none transition-opacity duration-150"
+                    classList={{ "opacity-0": !showSnapHint() || !dragging() }}
+                  >
+                    Hold <kbd class="kbd kbd-xs">Alt</kbd> to drag freely without
+                    snapping
+                  </p>
+                </div>
+
+                {/* HDR */}
+                <div class="setting-row">
+                  <label
+                    class="flex items-center justify-between text-white/90 text-sm font-mono select-none"
+                    classList={{
+                      "cursor-pointer": Settings.hdrSupported,
+                      "opacity-50 cursor-not-allowed": !Settings.hdrSupported,
+                    }}
+                  >
+                    <span class="flex flex-col gap-0.5">
+                      <span>HDR Rendering</span>
+                      <Show when={!Settings.hdrSupported}>
+                        <span class="text-white/40 text-xs">
+                          Not supported by this device
+                        </span>
+                      </Show>
                     </span>
-                  </Show>
-                </span>
-                <input
-                  type="checkbox"
-                  class="toggle toggle-primary"
-                  classList={{
-                    "cursor-not-allowed": !Settings.hdrSupported,
-                  }}
-                  checked={hdr()}
-                  disabled={!Settings.hdrSupported}
-                  onChange={(e) => {
-                    if (!Settings.hdrSupported) return;
-                    setHdr(e.currentTarget.checked);
-                  }}
-                />
-              </label>
-            </div>
+                    <input
+                      type="checkbox"
+                      class="toggle toggle-primary"
+                      classList={{
+                        "cursor-not-allowed": !Settings.hdrSupported,
+                      }}
+                      checked={hdr()}
+                      disabled={!Settings.hdrSupported}
+                      onChange={(e) => {
+                        if (!Settings.hdrSupported) return;
+                        setHdr(e.currentTarget.checked);
+                      }}
+                    />
+                  </label>
+                </div>
 
-            {/* Shaderpack */}
-            <div class="setting-row">
-              <div class="flex justify-between text-white/90 text-sm font-mono mb-1.5">
-                <span>Iris Shaderpack</span>
-                <span class="text-white/60 text-[11px]">{shaderpackStatus()}</span>
+                {/* Shaderpack — clickable row with chevron */}
+                <div
+                  class="setting-row cursor-pointer"
+                  onClick={() => setPanel("shaderpacks")}
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex flex-col gap-0.5">
+                      <span class="text-white/90 text-sm font-mono">Iris Shaderpack</span>
+                      <span class="text-white/50 text-xs">{shaderpackStatus()}</span>
+                    </div>
+                    <ChevronRight size={20} class="text-white/40" stroke-width={2} />
+                  </div>
+                </div>
+
+                <button
+                  class="btn btn-primary w-full mt-2"
+                  onClick={() => setPanel("pause")}
+                >
+                  Done
+                </button>
               </div>
 
-              {/* Library – Tauri only */}
-              {import.meta.isTauri && (
-                <div class="mb-3">
-                  <Show
-                    when={libraryPath()}
-                    fallback={
-                      <button
-                        class="btn btn-soft btn-secondary btn-sm w-full"
-                        onClick={onPickLibrary}
-                      >
-                        Set Shaderpack Library Folder
-                      </button>
-                    }
+              {/* ─── Shaderpacks panel (right) ─────── */}
+              <div class="w-80 shrink-0 flex flex-col gap-4 pl-6">
+                {/* Header */}
+                <div class="flex items-center gap-3 mb-1">
+                  <button
+                    class="flex items-center gap-1 text-white/50 hover:text-white/90 text-sm transition-colors duration-150 cursor-pointer"
+                    onClick={() => setPanel("settings")}
                   >
-                    {/* Path row */}
-                    <div class="flex items-center gap-2 mb-2">
-                      <span class="text-white/40 text-[11px] font-mono truncate flex-1" title={libraryPath()!}>
-                        {libraryPath()}
-                      </span>
-                      <button
-                        class="btn btn-soft btn-secondary btn-xs shrink-0"
-                        onClick={onPickLibrary}
-                      >
-                        Change
-                      </button>
-                    </div>
+                    <ChevronLeft size={18} stroke-width={2} />
+                    <span>Settings</span>
+                  </button>
+                  <h2 class="text-white font-bold text-2xl tracking-wide">
+                    Shaderpacks
+                  </h2>
+                </div>
 
-                    {/* Pack list */}
-                    <Show when={!libraryScanning()} fallback={
-                      <p class="text-white/40 text-xs text-center py-2">Scanning…</p>
-                    }>
-                      <Show
-                        when={libraryPacks().length > 0}
-                        fallback={
-                          <p class="text-white/40 text-xs text-center py-2">
-                            No shaderpacks found. Drop folders into the library directory to add them.
-                          </p>
-                        }
-                      >
-                        <div class="flex flex-col gap-0.5 max-h-40 overflow-y-auto pr-1">
-                          <For each={libraryPacks()}>
-                            {(name) => (
-                              <div class="flex items-center justify-between rounded px-2 py-1 hover:bg-white/5">
-                                <span class="text-white/80 text-xs font-mono truncate flex-1">{name}</span>
-                                <button
-                                  class="btn btn-soft btn-primary btn-xs ml-2 shrink-0"
-                                  onClick={() => onLoadFromLibrary(name)}
-                                >
-                                  Load
-                                </button>
-                              </div>
-                            )}
-                          </For>
-                        </div>
-                      </Show>
-                    </Show>
+                {/* Active indicator */}
+                <div class="setting-row py-2">
+                  <div class="flex items-center justify-between text-sm font-mono">
+                    <span class="text-white/60">Active</span>
+                    <span class="text-white/90 truncate ml-2">
+                      {activePackName() ?? "None"}
+                    </span>
+                  </div>
+                </div>
 
-                    <button
-                      class="btn btn-ghost btn-xs text-white/40 hover:text-white/70 mt-1.5 w-full"
-                      onClick={() => doScanLibrary().catch(() => {})}
+                {/* Pack list */}
+                <div class="setting-row p-0 overflow-hidden">
+                  <Show when={!libraryScanning()} fallback={
+                    <p class="text-white/40 text-xs text-center py-6">Scanning library…</p>
+                  }>
+                    <Show
+                      when={libraryPacks().length > 0}
+                      fallback={
+                        <p class="text-white/40 text-xs text-center py-6 px-4">
+                          No shaderpacks in library. Use the button below to add one.
+                        </p>
+                      }
                     >
-                      Refresh
-                    </button>
-                  </Show>
-                  <Show when={libraryError()}>
-                    {(msg) => <p class="text-xs text-red-300 mt-1">{msg()}</p>}
+                      <div class="flex flex-col max-h-60 overflow-y-auto">
+                        <For each={libraryPacks()}>
+                          {(name) => {
+                            const isActive = () => activePackName() === name;
+                            const isHighlighted = () => highlightedPack() === name;
+                            return (
+                              <div
+                                class="flex items-center justify-between px-3 py-2 transition-colors duration-150"
+                                classList={{
+                                  "bg-primary/15 border-l-2 border-primary": isActive(),
+                                  "hover:bg-white/5": !isActive(),
+                                  "ring-2 ring-primary ring-inset animate-pulse": isHighlighted(),
+                                }}
+                              >
+                                <span class="text-white/80 text-xs font-mono truncate flex-1">
+                                  {name}
+                                </span>
+                                <Show when={isActive()} fallback={
+                                  <button
+                                    class="btn btn-soft btn-primary btn-xs ml-2 shrink-0"
+                                    onClick={() => onLoadFromLibrary(name)}
+                                  >
+                                    Apply
+                                  </button>
+                                }>
+                                  <span class="text-primary text-xs font-semibold ml-2 shrink-0">
+                                    Active
+                                  </span>
+                                </Show>
+                              </div>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </Show>
                   </Show>
                 </div>
-              )}
 
-              {/* Ad-hoc load */}
-              <div class="flex gap-2">
-                <button class="btn btn-soft btn-primary btn-sm flex-1" onClick={onLoadFolder}>
-                  Load Folder
-                </button>
-                <button class="btn btn-soft btn-primary btn-sm flex-1" onClick={onLoadZip}>
-                  Load ZIP
-                </button>
-                <button class="btn btn-soft btn-error btn-sm" onClick={onDisableShaderpack}>
-                  Disable
+                <Show when={libraryError()}>
+                  {(msg) => <p class="text-xs text-red-300">{msg()}</p>}
+                </Show>
+                <Show when={shaderpackError()}>
+                  {(msg) => <p class="text-xs text-red-300">{msg()}</p>}
+                </Show>
+
+                {/* Actions */}
+                <div class="flex gap-2">
+                  {import.meta.isTauri ? (
+                    <button
+                      class="btn btn-soft btn-secondary btn-sm flex-1"
+                      onClick={onAddFolder}
+                    >
+                      <Plus size={14} stroke-width={2.5} />
+                      Add Folder
+                    </button>
+                  ) : (
+                    <button
+                      class="btn btn-soft btn-secondary btn-sm flex-1"
+                      onClick={onAddZip}
+                    >
+                      <Plus size={14} stroke-width={2.5} />
+                      Add Files
+                    </button>
+                  )}
+                  <Show when={activePackName()}>
+                    <button
+                      class="btn btn-soft btn-error btn-sm"
+                      onClick={onDisableShaderpack}
+                    >
+                      Disable
+                    </button>
+                  </Show>
+                </div>
+
+                {/* Hidden file inputs for web */}
+                {!import.meta.isTauri && (
+                  <>
+                    <input
+                      ref={folderInputRef}
+                      type="file"
+                      multiple
+                      class="hidden"
+                      onChange={(e) => {
+                        onWebFolderPicked(e).catch(onWebPickerError);
+                      }}
+                    />
+                    <input
+                      ref={zipInputRef}
+                      type="file"
+                      accept=".zip"
+                      class="hidden"
+                      onChange={(e) => {
+                        onWebZipPicked(e).catch(onWebPickerError);
+                      }}
+                    />
+                  </>
+                )}
+
+                <button
+                  class="btn btn-primary w-full"
+                  onClick={() => setPanel("settings")}
+                >
+                  Done
                 </button>
               </div>
-              <Show when={shaderpackError()}>
-                {(msg) => <p class="text-xs text-red-300 mt-1.5">{msg()}</p>}
-              </Show>
-              <input
-                ref={folderInputRef}
-                type="file"
-                multiple
-                class="hidden"
-                onChange={(e) => {
-                  onWebFolderPicked(e).catch(onWebPickerError);
-                }}
-              />
-              <input
-                ref={zipInputRef}
-                type="file"
-                accept=".zip"
-                class="hidden"
-                onChange={(e) => {
-                  onWebZipPicked(e).catch(onWebPickerError);
-                }}
-              />
             </div>
-
-            <button
-              class="btn btn-primary w-full mt-2"
-              onClick={() => setPanel("pause")}
-            >
-              Done
-            </button>
           </div>
         </Show>
       </div>

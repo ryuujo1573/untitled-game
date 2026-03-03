@@ -36,6 +36,18 @@
   height: 96px;
 }
 
+body[data-app-mode="title"] #crosshair,
+body[data-app-mode="title"] #debug-compass,
+body[data-app-mode="title"] #hotbar,
+body[data-app-mode="title"] #help,
+body[data-app-mode="title"] #pause-root {
+  display: none !important;
+}
+
+body[data-app-mode="playing"] #title-root {
+  display: none !important;
+}
+
 /* ── Section headers inside pre-formatted debug text ────────── */
 #debug-text .dbg-section {
   @apply font-bold text-yellow-300;

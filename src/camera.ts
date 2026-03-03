@@ -79,4 +79,20 @@ export class Camera {
     mat4.perspectiveZO(proj, (70 * Math.PI) / 180, aspect, 0.1, 500.0);
     return proj;
   }
+
+  setPose(position: [number, number, number], yaw: number, pitch: number): void {
+    this.position[0] = position[0];
+    this.position[1] = position[1];
+    this.position[2] = position[2];
+    this.yaw = yaw;
+    this.pitch = pitch;
+  }
+
+  getPose(): { position: [number, number, number]; yaw: number; pitch: number } {
+    return {
+      position: [this.position[0], this.position[1], this.position[2]],
+      yaw: this.yaw,
+      pitch: this.pitch,
+    };
+  }
 }

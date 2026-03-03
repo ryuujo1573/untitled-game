@@ -1,55 +1,84 @@
-import { open } from "@tauri-apps/plugin-dialog";
-import { readDir } from "@tauri-apps/plugin-fs";
-import { Settings } from "~/settings";
+import { getVFS } from "~/vfs";
+import type { VFS } from "~/vfs/types";
 import { loadShaderpack } from "~/shaderpack/runtime";
 
-type DirEntry = { name?: string; isDirectory?: boolean; isFile?: boolean };
+const SHADERPACKS_DIR = "shaderpacks";
 
-export function getLibraryPath(): string | null {
-  return Settings.shaderpackLibraryPath;
+/** Ensure the top-level shaderpacks directory exists. */
+async function ensureRoot(vfs: VFS): Promise<void> {
+  await vfs.mkdir(SHADERPACKS_DIR);
 }
 
 /**
- * Opens a directory picker and saves the chosen path as the library directory.
- * Returns the chosen path, or null if the user cancelled.
+ * Store a shaderpack's files into the VFS under `shaderpacks/<name>/`.
+ * Overwrites any existing pack with the same name.
  */
-export async function pickLibraryDirectory(): Promise<string | null> {
-  const selected = await open({ directory: true, multiple: false });
-  if (!selected || Array.isArray(selected)) return null;
-  Settings.shaderpackLibraryPath = selected;
-  Settings.save();
-  return selected;
-}
+export async function addShaderpack(name: string, files: Map<string, string>): Promise<void> {
+  const vfs = await getVFS();
+  await ensureRoot(vfs);
 
-/**
- * Scans the configured library directory and returns names of subdirectories
- * that look like shaderpacks (i.e. contain a `shaders/` subdirectory).
- */
-export async function scanLibrary(): Promise<string[]> {
-  const libraryPath = Settings.shaderpackLibraryPath;
-  if (!libraryPath) return [];
+  const packRoot = `${SHADERPACKS_DIR}/${name}`;
 
-  const topEntries = (await readDir(libraryPath)) as DirEntry[];
-  const packs: string[] = [];
-
-  for (const entry of topEntries) {
-    if (!entry.name || !entry.isDirectory) continue;
-
-    const packPath = `${libraryPath}/${entry.name}`;
-    const packEntries = (await readDir(packPath).catch(() => [])) as DirEntry[];
-    const hasShaders = packEntries.some((e) => e.name === "shaders" && e.isDirectory);
-    if (hasShaders) packs.push(entry.name);
+  // Remove old data if present.
+  if (await vfs.exists(packRoot)) {
+    await vfs.remove(packRoot, { recursive: true });
   }
 
-  packs.sort((a, b) => a.localeCompare(b));
-  return packs;
+  for (const [relPath, content] of files) {
+    await vfs.writeTextFile(`${packRoot}/${relPath}`, content);
+  }
 }
 
 /**
- * Loads a named shaderpack from the library directory.
+ * Scans the VFS shaderpacks directory and returns sorted pack names.
  */
-export async function loadPackFromLibrary(packName: string): Promise<void> {
-  const libraryPath = Settings.shaderpackLibraryPath;
-  if (!libraryPath) throw new Error("No library directory configured.");
-  await loadShaderpack({ kind: "folder", path: `${libraryPath}/${packName}` });
+export async function scanLibrary(): Promise<string[]> {
+  const vfs = await getVFS();
+  await ensureRoot(vfs);
+
+  const entries = await vfs.readDir(SHADERPACKS_DIR);
+  return entries
+    .filter((e) => e.isDir)
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Remove a shaderpack from the VFS library.
+ */
+export async function removeShaderpack(name: string): Promise<void> {
+  const vfs = await getVFS();
+  await vfs.remove(`${SHADERPACKS_DIR}/${name}`, { recursive: true });
+}
+
+/**
+ * Read all files from a stored shaderpack into a virtual file map.
+ */
+export async function readShaderpackFiles(name: string): Promise<Map<string, string>> {
+  const vfs = await getVFS();
+  const packRoot = `${SHADERPACKS_DIR}/${name}`;
+  const out = new Map<string, string>();
+
+  async function walk(dir: string, prefix: string): Promise<void> {
+    const entries = await vfs.readDir(dir);
+    for (const entry of entries) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDir) {
+        await walk(`${dir}/${entry.name}`, rel);
+      } else {
+        const text = await vfs.readTextFile(`${dir}/${entry.name}`);
+        out.set(rel, text);
+      }
+    }
+  }
+
+  await walk(packRoot, "");
+  return out;
+}
+
+/**
+ * Load a named shaderpack from the VFS library and activate it.
+ */
+export async function loadPackFromLibrary(name: string): Promise<void> {
+  await loadShaderpack({ kind: "vfs", name });
 }

@@ -7,7 +7,7 @@
     <title>Voxxer</title>
     <link rel="stylesheet" href="./src/style.css" />
   </head>
-  <body class="bg-black overflow-hidden h-full w-full touch-none">
+  <body class="bg-black overflow-hidden h-full w-full touch-none" data-app-mode="title">
     <canvas id="webglCanvas" tabindex="-1" contenteditable="false"></canvas>
 
     <!-- Invisible Input to trap IME -->
@@ -48,6 +48,7 @@
 
     <!-- Solid.js mount point for PauseMenu overlay -->
     <div id="pause-root"></div>
+    <div id="title-root"></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

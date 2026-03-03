@@ -31,8 +31,11 @@ import { buildAllAtlasesFromManifest } from "~/atlas";
 import { ResourcePackManager } from "~/resource-pack";
 import { raycast, type RayHit } from "~/raycaster";
 import { Settings } from "~/settings";
-import { PauseMenu } from "~/pause-menu.tsx";
+import { PauseMenu, type QuitToTitleIntent } from "~/pause-menu.tsx";
+import { mountDropOverlay } from "~/drop-overlay";
 import Time from "~/time-manager";
+import type { GameSaveV1 } from "~/game/session-types";
+import { captureFromRuntime, hydrateRuntime } from "~/game/session-codec";
 import { ShaderProgramRegistry } from "~/shaderpack/registry";
 import { STAGE_NAMES } from "~/shaderpack/types";
 import { getShaderpackStateSnapshot } from "~/shaderpack/runtime";
@@ -106,12 +109,17 @@ const CLOUD_UBO_FLOATS = 4;
 
 export class WebGPURenderer implements IRenderer {
   private readonly canvas: HTMLCanvasElement;
+  private captureSessionFn: (() => GameSaveV1) | null = null;
+  private destroySessionFn: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
-  async start(): Promise<void> {
+  async startSession(
+    initialSave: GameSaveV1,
+    hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+  ): Promise<void> {
     const canvas = this.canvas;
 
     // ── 1. Adapter + device ──────────────────────────────────────────────
@@ -658,15 +666,19 @@ export class WebGPURenderer implements IRenderer {
 
     // ── Game objects ──────────────────────────────────────────────────────
     const camera   = new Camera();
-    const world    = new World();
-    world.generate(4);
+    const world    = World.fromSnapshot(initialSave.world);
 
     const physics   = new Physics(camera, world);
-    const pauseMenu = new PauseMenu(() => input.requestLock());
+    const pauseMenu = new PauseMenu(
+      () => input.requestLock(),
+      (intent) => hooks.onQuitRequested(intent),
+    );
     pauseMenu.mount(document.getElementById("pause-root")!);
+    const disposeDropOverlay = mountDropOverlay(document.getElementById("pause-root")!);
 
     const debug = new DebugOverlay(null);
     const input = new InputManager(canvas, camera, physics, world, rebuildChunk, pauseMenu);
+    hydrateRuntime(initialSave, { world, camera, physics, input });
 
     world.chunks.forEach((chunk) => uploadChunk(chunk));
 
@@ -678,10 +690,13 @@ export class WebGPURenderer implements IRenderer {
     const scratchMat = mat4.create();
     const frustum    = new Frustum();
     const vpMatrix   = mat4.create();
+    let running = true;
+    let rafId = 0;
 
     // ── Render loop ───────────────────────────────────────────────────────
     function frame(): void {
-      requestAnimationFrame(frame);
+      if (!running) return;
+      rafId = requestAnimationFrame(frame);
       Time.CalculateTimeVariables();
       input.update();
 
@@ -921,6 +936,39 @@ export class WebGPURenderer implements IRenderer {
     }
 
     frame();
+
+    this.captureSessionFn = () =>
+      captureFromRuntime(
+        { world, camera, physics, input },
+        {
+          id: initialSave.id,
+          name: initialSave.name,
+          createdAtMs: initialSave.createdAtMs,
+        },
+      );
+    this.destroySessionFn = () => {
+      running = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", resize);
+      input.destroy();
+      pauseMenu.destroy();
+      debug.destroy();
+      disposeDropOverlay();
+      device.destroy();
+    };
+  }
+
+  captureSession(): GameSaveV1 {
+    if (!this.captureSessionFn) {
+      throw new Error("No active WebGPU session");
+    }
+    return this.captureSessionFn();
+  }
+
+  destroy(): void {
+    this.destroySessionFn?.();
+    this.destroySessionFn = null;
+    this.captureSessionFn = null;
   }
 }
 

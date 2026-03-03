@@ -18,6 +18,7 @@ function oreRng(wx: number, y: number, wz: number): number {
  */
 export class World {
   chunks = new Map<string, Chunk>();
+  gridSize = 0;
 
   private key(cx: number, cz: number): string {
     return `${cx},${cz}`;
@@ -66,6 +67,8 @@ export class World {
    * sine-wave heightmap so there are gentle rolling hills.
    */
   generate(gridSize = 4): void {
+    this.chunks.clear();
+    this.gridSize = gridSize;
     for (let cx = 0; cx < gridSize; cx++) {
       for (let cz = 0; cz < gridSize; cz++) {
         const chunk = new Chunk(cx, cz);
@@ -112,4 +115,36 @@ export class World {
       }
     }
   }
+
+  toSnapshot(): { generator: { kind: "default_heightmap"; gridSize: number }; chunks: Array<{ cx: number; cz: number; blocks: Uint8Array }> } {
+    return {
+      generator: {
+        kind: "default_heightmap",
+        gridSize: this.gridSize || inferGridSize(this.chunks),
+      },
+      chunks: Array.from(this.chunks.values()).map((chunk) => chunk.toSnapshot()),
+    };
+  }
+
+  static fromSnapshot(snapshot: {
+    generator: { kind: "default_heightmap"; gridSize: number };
+    chunks: Array<{ cx: number; cz: number; blocks: Uint8Array }>;
+  }): World {
+    const world = new World();
+    world.gridSize = snapshot.generator.gridSize;
+    for (const chunkSnapshot of snapshot.chunks) {
+      const chunk = Chunk.fromSnapshot(chunkSnapshot);
+      world.chunks.set(world.key(chunk.cx, chunk.cz), chunk);
+    }
+    return world;
+  }
+}
+
+function inferGridSize(chunks: Map<string, Chunk>): number {
+  if (chunks.size === 0) return 0;
+  let maxCoord = 0;
+  for (const chunk of chunks.values()) {
+    maxCoord = Math.max(maxCoord, chunk.cx + 1, chunk.cz + 1);
+  }
+  return maxCoord;
 }

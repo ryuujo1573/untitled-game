@@ -5,6 +5,7 @@ import { buildVirtualFilesFromFolder, readZipFileBytes } from "~/shaderpack/load
 import { transpileGLSLToWGSL } from "~/shaderpack/naga";
 import { preprocessShader } from "~/shaderpack/preprocess";
 import { extractZipToVirtualFiles } from "~/shaderpack/zip";
+import { addShaderpack, readShaderpackFiles } from "~/shaderpack/library";
 import { STAGE_NAMES, type ActiveShaderpackInfo, type ShaderStageName } from "~/shaderpack/types";
 import type { ShaderpackDiagnostics, ShaderpackManifest, ShaderpackSource } from "~/shaderpack/types";
 import type { ShaderStageStatus } from "~/shaderpack/registry";
@@ -46,6 +47,10 @@ function stripPackName(path: string): string {
 }
 
 async function loadVirtualFiles(source: ShaderpackSource): Promise<{ files: Map<string, string>; warnings: string[] }> {
+  if (source.kind === "vfs") {
+    return { files: await readShaderpackFiles(source.name), warnings: [] };
+  }
+
   if (source.kind === "browser-files") {
     return { files: await buildVirtualFilesFromBrowserFiles(source.files), warnings: [] };
   }
@@ -57,6 +62,21 @@ async function loadVirtualFiles(source: ShaderpackSource): Promise<{ files: Map<
   const bytes = await readZipFileBytes(source.path);
   const extracted = await extractZipToVirtualFiles(bytes);
   return { files: extracted.files, warnings: extracted.warnings };
+}
+
+function deriveName(source: ShaderpackSource): string {
+  if (source.kind === "vfs") return source.name;
+  if (source.kind === "browser-files") {
+    if (source.name) return source.name;
+    // Try to infer from the first file's webkitRelativePath.
+    const first = source.files[0];
+    const rel = (first as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
+    const segments = rel.split("/").filter(Boolean);
+    // If there's a folder prefix before "shaders/", use it as the pack name.
+    if (segments.length > 1 && segments[0] !== "shaders") return segments[0];
+    return "browser-shaderpack";
+  }
+  return stripPackName(source.path);
 }
 
 function stageStatusBase(stage: ShaderStageName, reason: string): ShaderStageStatus {
@@ -127,7 +147,7 @@ export async function loadShaderpack(source: ShaderpackSource): Promise<void> {
       throw new Error("Shaderpack is missing the shaders/ directory or readable shader files.");
     }
 
-    const name = source.kind === "browser-files" ? "browser-shaderpack" : stripPackName(source.path);
+    const name = deriveName(source);
     const manifest = buildManifestFromVirtualFiles(files, name);
     const stageStatuses = await computeStageStatuses(manifest);
 
@@ -147,6 +167,11 @@ export async function loadShaderpack(source: ShaderpackSource): Promise<void> {
       errors: [],
       warnings: warningsCombined.map((message) => ({ message })),
     };
+
+    // Persist to VFS so the pack appears in the library on next scan.
+    if (source.kind !== "vfs") {
+      await addShaderpack(name, files).catch(() => {});
+    }
   } catch (error) {
     state.active = null;
     state.manifest = null;
