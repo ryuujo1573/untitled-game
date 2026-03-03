@@ -1,10 +1,27 @@
-import { readDir, readTextFile, readFile } from "@tauri-apps/plugin-fs";
+import {
+  readDir,
+  readTextFile,
+  readFile,
+} from "@tauri-apps/plugin-fs";
 
 const TEXT_EXTENSIONS = new Set([
-  ".vsh", ".fsh", ".gsh", ".csh", ".glsl", ".inc", ".properties",
+  ".vsh",
+  ".fsh",
+  ".gsh",
+  ".csh",
+  ".glsl",
+  ".inc",
+  ".properties",
 ]);
 const BINARY_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".gif", ".webp", ".hdr",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".tga",
+  ".bmp",
+  ".gif",
+  ".webp",
+  ".hdr",
 ]);
 
 function normalize(path: string): string {
@@ -16,7 +33,9 @@ function getExtension(path: string): string {
   return dot >= 0 ? path.slice(dot).toLowerCase() : "";
 }
 
-async function walkDirRecursive(root: string): Promise<string[]> {
+async function walkDirRecursive(
+  root: string,
+): Promise<string[]> {
   const stack: string[] = [root];
   const files: string[] = [];
 
@@ -44,14 +63,21 @@ export interface FolderLoadResult {
   binaryFiles: Map<string, Uint8Array>;
 }
 
-export async function buildVirtualFilesFromFolder(folderPath: string): Promise<FolderLoadResult> {
-  const normalizedRoot = normalize(folderPath).replace(/\/+$/, "");
+export async function buildVirtualFilesFromFolder(
+  folderPath: string,
+): Promise<FolderLoadResult> {
+  const normalizedRoot = normalize(folderPath).replace(
+    /\/+$/,
+    "",
+  );
   const allFiles = await walkDirRecursive(normalizedRoot);
   const textFiles = new Map<string, string>();
   const binaryFiles = new Map<string, Uint8Array>();
 
   for (const abs of allFiles) {
-    const rel = normalize(abs).slice(normalizedRoot.length).replace(/^\/+/, "");
+    const rel = normalize(abs)
+      .slice(normalizedRoot.length)
+      .replace(/^\/+/, "");
     const ext = getExtension(rel);
 
     if (TEXT_EXTENSIONS.has(ext)) {
@@ -59,14 +85,23 @@ export async function buildVirtualFilesFromFolder(folderPath: string): Promise<F
       textFiles.set(rel, text);
     } else if (BINARY_EXTENSIONS.has(ext)) {
       const bytes = await readFile(abs);
-      binaryFiles.set(rel, bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer));
+      binaryFiles.set(
+        rel,
+        bytes instanceof Uint8Array
+          ? bytes
+          : new Uint8Array(bytes as ArrayBuffer),
+      );
     }
   }
 
   return { textFiles, binaryFiles };
 }
 
-export async function readZipFileBytes(path: string): Promise<Uint8Array> {
+export async function readZipFileBytes(
+  path: string,
+): Promise<Uint8Array> {
   const bytes = await readFile(path);
-  return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer);
+  return bytes instanceof Uint8Array
+    ? bytes
+    : new Uint8Array(bytes as ArrayBuffer);
 }

@@ -1,4 +1,7 @@
-import type { GameSaveV1, SaveSummary } from "~/game/session-types";
+import type {
+  GameSaveV1,
+  SaveSummary,
+} from "~/game/session-types";
 
 function deepCloneSave(save: GameSaveV1): GameSaveV1 {
   return {
@@ -14,8 +17,16 @@ function deepCloneSave(save: GameSaveV1): GameSaveV1 {
     },
     player: {
       ...save.player,
-      position: [...save.player.position] as [number, number, number],
-      velocity: [...save.player.velocity] as [number, number, number],
+      position: [...save.player.position] as [
+        number,
+        number,
+        number,
+      ],
+      velocity: [...save.player.velocity] as [
+        number,
+        number,
+        number,
+      ],
     },
     environment: { ...save.environment },
     entities: save.entities.map((entity) => ({
@@ -50,7 +61,13 @@ export class InMemorySaveStore {
     return save ? deepCloneSave(save) : null;
   }
 
-  create(name: string, snapshot: Omit<GameSaveV1, "id" | "name" | "createdAtMs" | "updatedAtMs">): GameSaveV1 {
+  create(
+    name: string,
+    snapshot: Omit<
+      GameSaveV1,
+      "id" | "name" | "createdAtMs" | "updatedAtMs"
+    >,
+  ): GameSaveV1 {
     const timestamp = nowMs();
     const id = `save-${this.nextId++}`;
     const save: GameSaveV1 = {
@@ -70,7 +87,13 @@ export class InMemorySaveStore {
     return deepCloneSave(save);
   }
 
-  update(id: string, snapshot: Omit<GameSaveV1, "id" | "name" | "createdAtMs" | "updatedAtMs">): GameSaveV1 {
+  update(
+    id: string,
+    snapshot: Omit<
+      GameSaveV1,
+      "id" | "name" | "createdAtMs" | "updatedAtMs"
+    >,
+  ): GameSaveV1 {
     const existing = this.saves.get(id);
     if (!existing) {
       throw new Error(`Save not found: ${id}`);

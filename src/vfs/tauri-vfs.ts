@@ -21,7 +21,9 @@ export async function createTauriVFS(): Promise<VFS> {
   const root = base.replace(/\/+$/, "");
 
   // Ensure the root exists.
-  await tauriMkdir(root, { recursive: true }).catch(() => {});
+  await tauriMkdir(root, { recursive: true }).catch(
+    () => {},
+  );
 
   const vfs: VFS = {
     async readDir(path) {
@@ -34,7 +36,10 @@ export async function createTauriVFS(): Promise<VFS> {
       const entries: VFSEntry[] = [];
       for (const e of raw) {
         if (!e.name) continue;
-        entries.push({ name: e.name, isDir: !!e.isDirectory });
+        entries.push({
+          name: e.name,
+          isDir: !!e.isDirectory,
+        });
       }
       return entries;
     },
@@ -45,7 +50,9 @@ export async function createTauriVFS(): Promise<VFS> {
 
     async readFile(path) {
       const data = await tauriReadFile(join(root, path));
-      return data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+      return data instanceof Uint8Array
+        ? data
+        : new Uint8Array(data as ArrayBuffer);
     },
 
     async writeTextFile(path, content) {
@@ -53,7 +60,9 @@ export async function createTauriVFS(): Promise<VFS> {
       const parentSegments = abs.split("/");
       parentSegments.pop();
       const parent = parentSegments.join("/");
-      await tauriMkdir(parent, { recursive: true }).catch(() => {});
+      await tauriMkdir(parent, { recursive: true }).catch(
+        () => {},
+      );
       await tauriWriteTextFile(abs, content);
     },
 
@@ -62,12 +71,16 @@ export async function createTauriVFS(): Promise<VFS> {
       const parentSegments = abs.split("/");
       parentSegments.pop();
       const parent = parentSegments.join("/");
-      await tauriMkdir(parent, { recursive: true }).catch(() => {});
+      await tauriMkdir(parent, { recursive: true }).catch(
+        () => {},
+      );
       await tauriWriteFile(abs, data);
     },
 
     async mkdir(path) {
-      await tauriMkdir(join(root, path), { recursive: true }).catch(() => {});
+      await tauriMkdir(join(root, path), {
+        recursive: true,
+      }).catch(() => {});
     },
 
     async exists(path) {
@@ -75,7 +88,9 @@ export async function createTauriVFS(): Promise<VFS> {
     },
 
     async remove(path, opts) {
-      await tauriRemove(join(root, path), { recursive: opts?.recursive });
+      await tauriRemove(join(root, path), {
+        recursive: opts?.recursive,
+      });
     },
   };
 

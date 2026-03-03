@@ -1,5 +1,9 @@
-function initializeCanvas(canvasId: string): WebGL2RenderingContext | null {
-  const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+function initializeCanvas(
+  canvasId: string,
+): WebGL2RenderingContext | null {
+  const canvas = document.getElementById(
+    canvasId,
+  ) as HTMLCanvasElement;
   if (!canvas) {
     console.error(`Canvas with id '${canvasId}' not found`);
     return null;
@@ -9,14 +13,18 @@ function initializeCanvas(canvasId: string): WebGL2RenderingContext | null {
   //const gl = false; //For testing purposes
 
   if (!gl) {
-    console.warn("WebGL2 not supported, falling back to 2D context");
+    console.warn(
+      "WebGL2 not supported, falling back to 2D context",
+    );
     const context = canvas.getContext("2d");
     if (context) {
       context.fillStyle = "black";
       context.fillRect(0, 0, canvas.width, canvas.height);
       console.info("Canvas set to black using 2D context");
     } else {
-      console.error("Neither WebGL nor 2D context is supported");
+      console.error(
+        "Neither WebGL nor 2D context is supported",
+      );
       handleNoCanvasSupport(canvas);
     }
     return null;

@@ -14,7 +14,10 @@ export interface VFS {
   readFile(path: string): Promise<Uint8Array>;
 
   /** Write UTF-8 text to a file, creating parent directories as needed. */
-  writeTextFile(path: string, content: string): Promise<void>;
+  writeTextFile(
+    path: string,
+    content: string,
+  ): Promise<void>;
 
   /** Write raw bytes to a file, creating parent directories as needed. */
   writeFile(path: string, data: Uint8Array): Promise<void>;
@@ -26,5 +29,8 @@ export interface VFS {
   exists(path: string): Promise<boolean>;
 
   /** Remove a file or directory. */
-  remove(path: string, opts?: { recursive?: boolean }): Promise<void>;
+  remove(
+    path: string,
+    opts?: { recursive?: boolean },
+  ): Promise<void>;
 }

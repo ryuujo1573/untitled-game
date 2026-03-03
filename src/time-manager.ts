@@ -31,7 +31,9 @@ class Time {
 
     // Advance normalised day time, wrapping at 1.
     this.worldTime =
-      (this.worldTime + this.deltaTime / this.DAY_DURATION_SECONDS) % 1;
+      (this.worldTime +
+        this.deltaTime / this.DAY_DURATION_SECONDS) %
+      1;
   }
 
   // Static method Example for static classes

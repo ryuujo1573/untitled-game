@@ -8,5 +8,5 @@ declare module "*.wgsl?raw" {
 }
 
 declare interface ImportMeta {
-  readonly isTauri: boolean
+  readonly isTauri: boolean;
 }

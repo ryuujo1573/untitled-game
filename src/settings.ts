@@ -23,9 +23,14 @@ export const Settings = {
     const raw = localStorage.getItem("voxer_settings");
     if (!raw) return;
     try {
-      const obj = JSON.parse(raw) as Partial<typeof Settings>;
+      const obj = JSON.parse(raw) as Partial<
+        typeof Settings
+      >;
       if (typeof obj.brightness === "number")
-        this.brightness = Math.max(0, Math.min(2, obj.brightness));
+        this.brightness = Math.max(
+          0,
+          Math.min(2, obj.brightness),
+        );
       if (typeof obj.hdr === "boolean") this.hdr = obj.hdr;
     } catch {
       // Ignore corrupt data.
@@ -35,7 +40,10 @@ export const Settings = {
   save(): void {
     localStorage.setItem(
       "voxer_settings",
-      JSON.stringify({ brightness: this.brightness, hdr: this.hdr }),
+      JSON.stringify({
+        brightness: this.brightness,
+        hdr: this.hdr,
+      }),
     );
   },
 };

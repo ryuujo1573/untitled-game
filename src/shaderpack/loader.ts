@@ -22,7 +22,10 @@ export function buildManifestFromVirtualFiles(
     normalized.set(normalize(k), v);
   }
 
-  const programs = new Map<ShaderStageName, ShaderpackProgram>();
+  const programs = new Map<
+    ShaderStageName,
+    ShaderpackProgram
+  >();
   const includes = new Map<string, string>();
 
   for (const stage of STAGE_NAMES) {
@@ -51,15 +54,22 @@ export function buildManifestFromVirtualFiles(
   for (const [path, content] of normalized) {
     if (!path.startsWith("shaders/")) continue;
     if (
-      path.endsWith(".vsh") || path.endsWith(".fsh") ||
-      path.endsWith(".gsh") || path.endsWith(".csh")
-    ) continue;
+      path.endsWith(".vsh") ||
+      path.endsWith(".fsh") ||
+      path.endsWith(".gsh") ||
+      path.endsWith(".csh")
+    )
+      continue;
     if (path.endsWith(".properties")) continue;
     includes.set(path.slice("shaders/".length), content);
   }
 
-  const properties = parseShadersProperties(normalized.get("shaders/shaders.properties") ?? "");
-  const blockMap = parseBlockProperties(normalized.get("shaders/block.properties") ?? "");
+  const properties = parseShadersProperties(
+    normalized.get("shaders/shaders.properties") ?? "",
+  );
+  const blockMap = parseBlockProperties(
+    normalized.get("shaders/block.properties") ?? "",
+  );
 
   return {
     packName,

@@ -5,7 +5,9 @@ export interface IRenderer {
   /** Initialise GPU resources and begin the RAF render loop. */
   startSession(
     initialSave: GameSaveV1,
-    hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+    hooks: {
+      onQuitRequested: (intent: QuitToTitleIntent) => void;
+    },
   ): Promise<void>;
 
   /** Capture a complete save snapshot from the live session. */

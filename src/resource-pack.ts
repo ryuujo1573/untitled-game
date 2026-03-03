@@ -1,24 +1,44 @@
-import type { AtlasSourceManifest, AtlasTileName } from "./atlas";
+import type {
+  AtlasSourceManifest,
+  AtlasTileName,
+} from "./atlas";
 import { ATLAS_TILE_NAMES } from "./atlas";
 
 function trimTrailingSlash(path: string): string {
   return path.endsWith("/") ? path.slice(0, -1) : path;
 }
 
-function buildChannelUrl(baseUrl: string, tileName: AtlasTileName, suffix = ""): string {
+function buildChannelUrl(
+  baseUrl: string,
+  tileName: AtlasTileName,
+  suffix = "",
+): string {
   return `${baseUrl}/${tileName}${suffix}.png`;
 }
 
-export function createManifestFromBaseUrl(baseUrl: string): AtlasSourceManifest {
+export function createManifestFromBaseUrl(
+  baseUrl: string,
+): AtlasSourceManifest {
   const normalized = trimTrailingSlash(baseUrl);
   const albedo: AtlasSourceManifest["albedo"] = {};
   const normal: AtlasSourceManifest["normal"] = {};
   const specular: AtlasSourceManifest["specular"] = {};
 
   for (const tileName of ATLAS_TILE_NAMES) {
-    albedo[tileName] = buildChannelUrl(normalized, tileName);
-    normal[tileName] = buildChannelUrl(normalized, tileName, "_n");
-    specular[tileName] = buildChannelUrl(normalized, tileName, "_s");
+    albedo[tileName] = buildChannelUrl(
+      normalized,
+      tileName,
+    );
+    normal[tileName] = buildChannelUrl(
+      normalized,
+      tileName,
+      "_n",
+    );
+    specular[tileName] = buildChannelUrl(
+      normalized,
+      tileName,
+      "_s",
+    );
   }
 
   return { albedo, normal, specular };
@@ -74,14 +94,25 @@ export class ResourcePackManager {
       this.setAtlasManifest(w.__PBR_TEXTURE_MANIFEST__);
       return;
     }
-    if (typeof w.__PBR_PACK_BASE_URL === "string" && w.__PBR_PACK_BASE_URL.trim().length > 0) {
+    if (
+      typeof w.__PBR_PACK_BASE_URL === "string" &&
+      w.__PBR_PACK_BASE_URL.trim().length > 0
+    ) {
       this.setAtlasBaseUrl(w.__PBR_PACK_BASE_URL.trim());
     }
-    if (typeof w.__CLOUD_TEXTURE_URL === "string" && w.__CLOUD_TEXTURE_URL.trim().length > 0) {
+    if (
+      typeof w.__CLOUD_TEXTURE_URL === "string" &&
+      w.__CLOUD_TEXTURE_URL.trim().length > 0
+    ) {
       this.setCloudTextureUrl(w.__CLOUD_TEXTURE_URL.trim());
     }
-    if (typeof w.__SKYBOX_TEXTURE_URL === "string" && w.__SKYBOX_TEXTURE_URL.trim().length > 0) {
-      this.setSkyboxTextureUrl(w.__SKYBOX_TEXTURE_URL.trim());
+    if (
+      typeof w.__SKYBOX_TEXTURE_URL === "string" &&
+      w.__SKYBOX_TEXTURE_URL.trim().length > 0
+    ) {
+      this.setSkyboxTextureUrl(
+        w.__SKYBOX_TEXTURE_URL.trim(),
+      );
     }
   }
 }

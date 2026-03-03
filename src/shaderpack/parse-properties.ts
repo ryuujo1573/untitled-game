@@ -1,4 +1,8 @@
-import type { ParsedExpression, ParsedShaderProperties, ShadowConfig } from "~/shaderpack/types";
+import type {
+  ParsedExpression,
+  ParsedShaderProperties,
+  ShadowConfig,
+} from "~/shaderpack/types";
 
 function parseBool(value: string): boolean | undefined {
   const v = value.trim().toLowerCase();
@@ -17,7 +21,9 @@ function parseInt(value: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function parseExpression(value: string): ParsedExpression | undefined {
+function parseExpression(
+  value: string,
+): ParsedExpression | undefined {
   const eq = value.indexOf("=");
   if (eq < 0) return undefined;
   const lhs = value.slice(0, eq).trim();
@@ -43,8 +49,13 @@ function defaultShadowConfig(): ShadowConfig {
   };
 }
 
-export function parseShadersProperties(source: string): ParsedShaderProperties {
-  const alphaTests = new Map<string, { func: string; ref: number }>();
+export function parseShadersProperties(
+  source: string,
+): ParsedShaderProperties {
+  const alphaTests = new Map<
+    string,
+    { func: string; ref: number }
+  >();
   const blends = new Map<string, string[]>();
   const flips = new Map<string, boolean>();
   const options = new Map<string, string>();
@@ -75,9 +86,13 @@ export function parseShadersProperties(source: string): ParsedShaderProperties {
 
     if (key.startsWith("alphaTest.")) {
       const stage = key.slice("alphaTest.".length);
-      const [func = "GREATER", refRaw = "0"] = value.split(/\s+/);
+      const [func = "GREATER", refRaw = "0"] =
+        value.split(/\s+/);
       const ref = Number.parseFloat(refRaw);
-      alphaTests.set(stage, { func, ref: Number.isFinite(ref) ? ref : 0 });
+      alphaTests.set(stage, {
+        func,
+        ref: Number.isFinite(ref) ? ref : 0,
+      });
       continue;
     }
 
@@ -90,7 +105,10 @@ export function parseShadersProperties(source: string): ParsedShaderProperties {
     if (key.startsWith("flip.")) {
       const stage = key.slice("flip.".length);
       const b = parseBool(value);
-      if (b === undefined) warnings.push(`Invalid flip value for ${key}: ${value}`);
+      if (b === undefined)
+        warnings.push(
+          `Invalid flip value for ${key}: ${value}`,
+        );
       else flips.set(stage, b);
       continue;
     }
@@ -101,7 +119,10 @@ export function parseShadersProperties(source: string): ParsedShaderProperties {
     }
 
     if (key.startsWith("texture.")) {
-      customTextures.set(key.slice("texture.".length), value);
+      customTextures.set(
+        key.slice("texture.".length),
+        value,
+      );
       continue;
     }
 
@@ -121,7 +142,10 @@ export function parseShadersProperties(source: string): ParsedShaderProperties {
     }
 
     // Shadow configuration
-    if (key === "shadowMapResolution" || key === "shadow.resolution") {
+    if (
+      key === "shadowMapResolution" ||
+      key === "shadow.resolution"
+    ) {
       const v = parseInt(value);
       if (v !== undefined) shadow.mapResolution = v;
       continue;
@@ -146,17 +170,26 @@ export function parseShadersProperties(source: string): ParsedShaderProperties {
       if (b !== undefined) shadow.enabled = b;
       continue;
     }
-    if (key === "shadowTerrain" || key === "shadow.terrain") {
+    if (
+      key === "shadowTerrain" ||
+      key === "shadow.terrain"
+    ) {
       const b = parseBool(value);
       if (b !== undefined) shadow.terrain = b;
       continue;
     }
-    if (key === "shadowTranslucent" || key === "shadow.translucent") {
+    if (
+      key === "shadowTranslucent" ||
+      key === "shadow.translucent"
+    ) {
       const b = parseBool(value);
       if (b !== undefined) shadow.translucent = b;
       continue;
     }
-    if (key === "shadowEntities" || key === "shadow.entities") {
+    if (
+      key === "shadowEntities" ||
+      key === "shadow.entities"
+    ) {
       const b = parseBool(value);
       if (b !== undefined) shadow.entities = b;
       continue;
@@ -210,30 +243,53 @@ export function parseShadersProperties(source: string): ParsedShaderProperties {
 
     if (key.startsWith("uniform.")) {
       const uniformName = key.slice("uniform.".length);
-      const expr = parseExpression(`${uniformName}=${value}`);
-      if (expr) uniforms.set(uniformName.split(".").slice(-1)[0], expr);
-      else warnings.push(`Invalid uniform expression: ${key}=${value}`);
+      const expr = parseExpression(
+        `${uniformName}=${value}`,
+      );
+      if (expr)
+        uniforms.set(
+          uniformName.split(".").slice(-1)[0],
+          expr,
+        );
+      else
+        warnings.push(
+          `Invalid uniform expression: ${key}=${value}`,
+        );
       continue;
     }
 
     if (key.startsWith("variable.")) {
       const variableName = key.slice("variable.".length);
-      const expr = parseExpression(`${variableName}=${value}`);
-      if (expr) variables.set(variableName.split(".").slice(-1)[0], expr);
-      else warnings.push(`Invalid variable expression: ${key}=${value}`);
+      const expr = parseExpression(
+        `${variableName}=${value}`,
+      );
+      if (expr)
+        variables.set(
+          variableName.split(".").slice(-1)[0],
+          expr,
+        );
+      else
+        warnings.push(
+          `Invalid variable expression: ${key}=${value}`,
+        );
       continue;
     }
 
     // Silently ignore known but unhandled keys (screen.*, sliders.*, etc.)
     if (
-      key.startsWith("screen.") || key.startsWith("sliders.") ||
-      key.startsWith("profile.") || key === "dynamicHandLight" ||
-      key === "oldHandLight" || key === "separateAo"
+      key.startsWith("screen.") ||
+      key.startsWith("sliders.") ||
+      key.startsWith("profile.") ||
+      key === "dynamicHandLight" ||
+      key === "oldHandLight" ||
+      key === "separateAo"
     ) {
       continue;
     }
 
-    warnings.push(`Unsupported shaders.properties key: ${key}`);
+    warnings.push(
+      `Unsupported shaders.properties key: ${key}`,
+    );
   }
 
   return {

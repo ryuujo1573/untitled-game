@@ -5,7 +5,9 @@ const lfs = new FS("voxxer");
 const pfs = lfs.promises;
 
 /** Ensure all ancestor directories of `absPath` exist. */
-async function ensureParent(absPath: string): Promise<void> {
+async function ensureParent(
+  absPath: string,
+): Promise<void> {
   const parts = absPath.split("/").filter(Boolean);
   parts.pop(); // drop the file name
   let cur = "";
@@ -67,7 +69,10 @@ export async function createWebVFS(): Promise<VFS> {
     },
 
     async readTextFile(path) {
-      return (await pfs.readFile(abs(path), "utf8")) as string;
+      return (await pfs.readFile(
+        abs(path),
+        "utf8",
+      )) as string;
     },
 
     async readFile(path) {

@@ -13,23 +13,23 @@ export type ColortexFormat = GPUTextureFormat;
 
 /** Maps Optifine/Iris format constant names to WebGPU texture format strings. */
 const FORMAT_NAME_MAP: Record<string, GPUTextureFormat> = {
-  RGBA8:         "rgba8unorm",
-  RGBA8UI:       "rgba8uint",
-  RGBA8I:        "rgba8sint",
-  RGBA16:        "rgba16uint",
-  RGBA16F:       "rgba16float",
-  RGBA32F:       "rgba32float",
-  RGBA32UI:      "rgba32uint",
-  RGBA32I:       "rgba32sint",
-  RG8:           "rg8unorm",
-  RG16:          "rg16uint",
-  RG16F:         "rg16float",
-  RG32F:         "rg32float",
-  R8:            "r8unorm",
-  R16F:          "r16float",
-  R32F:          "r32float",
+  RGBA8: "rgba8unorm",
+  RGBA8UI: "rgba8uint",
+  RGBA8I: "rgba8sint",
+  RGBA16: "rgba16uint",
+  RGBA16F: "rgba16float",
+  RGBA32F: "rgba32float",
+  RGBA32UI: "rgba32uint",
+  RGBA32I: "rgba32sint",
+  RG8: "rg8unorm",
+  RG16: "rg16uint",
+  RG16F: "rg16float",
+  RG32F: "rg32float",
+  R8: "r8unorm",
+  R16F: "r16float",
+  R32F: "r32float",
   R11F_G11F_B10F: "rg11b10ufloat",
-  RGB10_A2:      "rgb10a2unorm",
+  RGB10_A2: "rgb10a2unorm",
 };
 
 export interface ColortexConfig {
@@ -47,7 +47,9 @@ export type ColortexOverrides = Map<number, ColortexConfig>;
  * If multiple shaders declare conflicting formats for the same buffer, the last
  * one wins (ordering is caller-determined, typically alphabetical stage order).
  */
-export function parseColortexOverrides(sources: Iterable<string>): ColortexOverrides {
+export function parseColortexOverrides(
+  sources: Iterable<string>,
+): ColortexOverrides {
   const overrides: ColortexOverrides = new Map();
 
   for (const source of sources) {
@@ -59,15 +61,25 @@ export function parseColortexOverrides(sources: Iterable<string>): ColortexOverr
   return overrides;
 }
 
-function getOrCreate(overrides: ColortexOverrides, index: number): ColortexConfig {
+function getOrCreate(
+  overrides: ColortexOverrides,
+  index: number,
+): ColortexConfig {
   let cfg = overrides.get(index);
-  if (!cfg) { cfg = {}; overrides.set(index, cfg); }
+  if (!cfg) {
+    cfg = {};
+    overrides.set(index, cfg);
+  }
   return cfg;
 }
 
 /** Match: const int colortexNFormat = FORMAT_TOKEN; */
-function parseColortexFormat(source: string, overrides: ColortexOverrides): void {
-  const re = /\bconst\s+int\s+colortex(\d+)Format\s*=\s*(\w+)\s*;/g;
+function parseColortexFormat(
+  source: string,
+  overrides: ColortexOverrides,
+): void {
+  const re =
+    /\bconst\s+int\s+colortex(\d+)Format\s*=\s*(\w+)\s*;/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const idx = Number.parseInt(m[1], 10);
@@ -80,8 +92,12 @@ function parseColortexFormat(source: string, overrides: ColortexOverrides): void
 }
 
 /** Match: const bool colortexNClear = true/false; */
-function parseColortexClear(source: string, overrides: ColortexOverrides): void {
-  const re = /\bconst\s+bool\s+colortex(\d+)Clear\s*=\s*(true|false)\s*;/g;
+function parseColortexClear(
+  source: string,
+  overrides: ColortexOverrides,
+): void {
+  const re =
+    /\bconst\s+bool\s+colortex(\d+)Clear\s*=\s*(true|false)\s*;/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const idx = Number.parseInt(m[1], 10);
@@ -92,15 +108,29 @@ function parseColortexClear(source: string, overrides: ColortexOverrides): void 
 }
 
 /** Match: const vec4 colortexNClearColor = vec4(r, g, b, a); */
-function parseColortexClearColor(source: string, overrides: ColortexOverrides): void {
-  const re = /\bconst\s+vec4\s+colortex(\d+)ClearColor\s*=\s*vec4\s*\(\s*([^)]+)\s*\)\s*;/g;
+function parseColortexClearColor(
+  source: string,
+  overrides: ColortexOverrides,
+): void {
+  const re =
+    /\bconst\s+vec4\s+colortex(\d+)ClearColor\s*=\s*vec4\s*\(\s*([^)]+)\s*\)\s*;/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const idx = Number.parseInt(m[1], 10);
     if (idx < 0 || idx > 7) continue;
-    const parts = m[2].split(",").map((s) => Number.parseFloat(s.trim()));
-    if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
-      getOrCreate(overrides, idx).clearColor = parts as [number, number, number, number];
+    const parts = m[2]
+      .split(",")
+      .map((s) => Number.parseFloat(s.trim()));
+    if (
+      parts.length === 4 &&
+      parts.every((n) => Number.isFinite(n))
+    ) {
+      getOrCreate(overrides, idx).clearColor = parts as [
+        number,
+        number,
+        number,
+        number,
+      ];
     }
   }
 }

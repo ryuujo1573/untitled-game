@@ -9,10 +9,20 @@ export interface ShaderStageStatus {
 }
 
 export class ShaderProgramRegistry {
-  private readonly statuses = new Map<ShaderStageName, ShaderStageStatus>();
+  private readonly statuses = new Map<
+    ShaderStageName,
+    ShaderStageStatus
+  >();
 
-  setBuiltin(stage: ShaderStageName, reason?: string): void {
-    this.statuses.set(stage, { stage, mode: "builtin", reason });
+  setBuiltin(
+    stage: ShaderStageName,
+    reason?: string,
+  ): void {
+    this.statuses.set(stage, {
+      stage,
+      mode: "builtin",
+      reason,
+    });
   }
 
   setOverride(stage: ShaderStageName): void {

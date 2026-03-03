@@ -56,15 +56,18 @@ export function raycast(
   const tMaxX =
     dx === 0
       ? Infinity
-      : (dx > 0 ? bx + 1 - origin[0] : origin[0] - bx) * tDeltaX;
+      : (dx > 0 ? bx + 1 - origin[0] : origin[0] - bx) *
+        tDeltaX;
   const tMaxY =
     dy === 0
       ? Infinity
-      : (dy > 0 ? by + 1 - origin[1] : origin[1] - by) * tDeltaY;
+      : (dy > 0 ? by + 1 - origin[1] : origin[1] - by) *
+        tDeltaY;
   const tMaxZ =
     dz === 0
       ? Infinity
-      : (dz > 0 ? bz + 1 - origin[2] : origin[2] - bz) * tDeltaZ;
+      : (dz > 0 ? bz + 1 - origin[2] : origin[2] - bz) *
+        tDeltaZ;
 
   let tmx = tMaxX;
   let tmy = tMaxY;

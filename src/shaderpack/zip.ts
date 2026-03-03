@@ -1,13 +1,22 @@
 import { unzipSync, strFromU8 } from "fflate";
 
 const BINARY_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".gif", ".webp", ".hdr",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".tga",
+  ".bmp",
+  ".gif",
+  ".webp",
+  ".hdr",
 ]);
 
 function isBinaryPath(path: string): boolean {
   const dot = path.lastIndexOf(".");
   if (dot < 0) return false;
-  return BINARY_EXTENSIONS.has(path.slice(dot).toLowerCase());
+  return BINARY_EXTENSIONS.has(
+    path.slice(dot).toLowerCase(),
+  );
 }
 
 export interface ZipExtractResult {
@@ -26,7 +35,9 @@ export interface ZipExtractResult {
  * If the zip contains a single top-level directory that wraps everything,
  * that prefix is stripped so paths start at the shaderpack root.
  */
-export async function extractZipToVirtualFiles(bytes: Uint8Array): Promise<ZipExtractResult> {
+export async function extractZipToVirtualFiles(
+  bytes: Uint8Array,
+): Promise<ZipExtractResult> {
   const warnings: string[] = [];
   const raw = unzipSync(bytes);
   const files = new Map<string, string>();
@@ -52,7 +63,9 @@ export async function extractZipToVirtualFiles(bytes: Uint8Array): Promise<ZipEx
   const allKeys = [...files.keys(), ...binaryFiles.keys()];
   if (allKeys.length > 0) {
     const firstSegment = allKeys[0].split("/")[0];
-    const allSharePrefix = allKeys.every((k) => k.startsWith(firstSegment + "/"));
+    const allSharePrefix = allKeys.every((k) =>
+      k.startsWith(firstSegment + "/"),
+    );
     if (allSharePrefix) {
       const prefix = firstSegment + "/";
       const strippedFiles = new Map<string, string>();
@@ -63,7 +76,11 @@ export async function extractZipToVirtualFiles(bytes: Uint8Array): Promise<ZipEx
       for (const [k, v] of binaryFiles) {
         strippedBinary.set(k.slice(prefix.length), v);
       }
-      return { files: strippedFiles, binaryFiles: strippedBinary, warnings };
+      return {
+        files: strippedFiles,
+        binaryFiles: strippedBinary,
+        warnings,
+      };
     }
   }
 

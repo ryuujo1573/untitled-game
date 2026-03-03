@@ -1,4 +1,7 @@
-import type { PlatformMacro, ShaderStageName } from "~/shaderpack/types";
+import type {
+  PlatformMacro,
+  ShaderStageName,
+} from "~/shaderpack/types";
 
 interface PreprocessInput {
   source: string;
@@ -65,22 +68,33 @@ function resolveIncludes(
   warnings: string[],
   stack: string[] = [],
 ): string {
-  return source.replace(/^\s*#include\s+"([^"]+)"\s*$/gm, (_full, relPath: string) => {
-    if (stack.includes(relPath)) {
-      warnings.push(`Include cycle detected: ${[...stack, relPath].join(" -> ")}`);
-      return "";
-    }
-    const included = includeMap.get(relPath);
-    if (included === undefined) {
-      warnings.push(`Missing include: ${relPath}`);
-      return "";
-    }
-    return resolveIncludes(included, includeMap, warnings, [...stack, relPath]);
-  });
+  return source.replace(
+    /^\s*#include\s+"([^"]+)"\s*$/gm,
+    (_full, relPath: string) => {
+      if (stack.includes(relPath)) {
+        warnings.push(
+          `Include cycle detected: ${[...stack, relPath].join(" -> ")}`,
+        );
+        return "";
+      }
+      const included = includeMap.get(relPath);
+      if (included === undefined) {
+        warnings.push(`Missing include: ${relPath}`);
+        return "";
+      }
+      return resolveIncludes(
+        included,
+        includeMap,
+        warnings,
+        [...stack, relPath],
+      );
+    },
+  );
 }
 
 function platformDefine(platform: PlatformMacro): string {
-  if (platform === "windows") return "#define MC_OS_WINDOWS";
+  if (platform === "windows")
+    return "#define MC_OS_WINDOWS";
   if (platform === "mac") return "#define MC_OS_MAC";
   return "#define MC_OS_LINUX";
 }
@@ -98,11 +112,16 @@ const RENDER_STAGE_VALUES: Record<string, number> = {
   MC_RENDER_STAGE_SHADOW: 9,
 };
 
-export function preprocessShader(input: PreprocessInput): PreprocessOutput {
+export function preprocessShader(
+  input: PreprocessInput,
+): PreprocessOutput {
   const warnings: string[] = [];
 
-  const versionMatch = input.source.match(/^\s*#version\s+.+$/m);
-  const versionLine = versionMatch?.[0]?.trim() ?? "#version 330";
+  const versionMatch = input.source.match(
+    /^\s*#version\s+.+$/m,
+  );
+  const versionLine =
+    versionMatch?.[0]?.trim() ?? "#version 330";
 
   let rest = input.source;
   if (versionMatch) {
@@ -153,6 +172,10 @@ export function preprocessShader(input: PreprocessInput): PreprocessOutput {
     macroLines.push(`#define ${k} ${v}`);
   }
 
-  const code = [versionLine, ...macroLines, rest.trimStart()].join("\n");
+  const code = [
+    versionLine,
+    ...macroLines,
+    rest.trimStart(),
+  ].join("\n");
   return { code, warnings };
 }

@@ -1,6 +1,8 @@
 import type { ParsedBlockMap } from "~/shaderpack/types";
 
-export function parseBlockProperties(source: string): ParsedBlockMap {
+export function parseBlockProperties(
+  source: string,
+): ParsedBlockMap {
   const blocks = new Map<string, number>();
   const warnings: string[] = [];
 
@@ -28,7 +30,9 @@ export function parseBlockProperties(source: string): ParsedBlockMap {
       continue;
     }
 
-    for (const token of value.split(/\s+/).filter(Boolean)) {
+    for (const token of value
+      .split(/\s+/)
+      .filter(Boolean)) {
       blocks.set(token, id);
     }
   }

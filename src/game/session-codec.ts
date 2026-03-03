@@ -19,7 +19,13 @@ interface SaveMeta {
   createdAtMs: number;
 }
 
-export function createGeneratedSave(_name: string, gridSize = 4): Omit<GameSaveV1, "id" | "name" | "createdAtMs" | "updatedAtMs"> {
+export function createGeneratedSave(
+  _name: string,
+  gridSize = 4,
+): Omit<
+  GameSaveV1,
+  "id" | "name" | "createdAtMs" | "updatedAtMs"
+> {
   const world = new World();
   world.generate(gridSize);
 
@@ -42,7 +48,10 @@ export function createGeneratedSave(_name: string, gridSize = 4): Omit<GameSaveV
   };
 }
 
-export function captureFromRuntime(runtime: RuntimeRefs, meta: SaveMeta): GameSaveV1 {
+export function captureFromRuntime(
+  runtime: RuntimeRefs,
+  meta: SaveMeta,
+): GameSaveV1 {
   const pose = runtime.camera.getPose();
   const physics = runtime.physics.getState();
 
@@ -69,12 +78,21 @@ export function captureFromRuntime(runtime: RuntimeRefs, meta: SaveMeta): GameSa
   };
 }
 
-export function hydrateRuntime(save: GameSaveV1, runtime: RuntimeRefs): void {
-  runtime.camera.setPose(save.player.position, save.player.yaw, save.player.pitch);
+export function hydrateRuntime(
+  save: GameSaveV1,
+  runtime: RuntimeRefs,
+): void {
+  runtime.camera.setPose(
+    save.player.position,
+    save.player.yaw,
+    save.player.pitch,
+  );
   runtime.physics.setState({
     velocity: save.player.velocity,
     onGround: save.player.onGround,
   });
-  runtime.input.setSelectedBlockType(save.player.selectedBlockType as BlockType);
+  runtime.input.setSelectedBlockType(
+    save.player.selectedBlockType as BlockType,
+  );
   Time.setWorldTime(save.environment.worldTime);
 }

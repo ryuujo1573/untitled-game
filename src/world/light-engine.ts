@@ -30,14 +30,21 @@ import { BLOCK_EMISSION, isOpaque } from "./block";
 const N = CHUNK_SIZE;
 
 /** Six cardinal directions as [dx, dy, dz]. */
-const DIRS: ReadonlyArray<readonly [number, number, number]> = [
-  [ 1,  0,  0], [-1,  0,  0],
-  [ 0,  1,  0], [ 0, -1,  0],
-  [ 0,  0,  1], [ 0,  0, -1],
+const DIRS: ReadonlyArray<
+  readonly [number, number, number]
+> = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
 ];
 
 /** Create 16 empty buckets for a level-bucketed BFS queue. */
-function makeBuckets(): Array<Array<[number, number, number]>> {
+function makeBuckets(): Array<
+  Array<[number, number, number]>
+> {
   return Array.from({ length: 16 }, () => []);
 }
 
@@ -77,28 +84,39 @@ export function recomputeWorldLight(world: World): void {
   for (let level = 15; level >= 1; level--) {
     for (const [wx, wy, wz] of skyQueue[level]) {
       // Stale-check: another path may have already set this higher.
-      const cx = Math.floor(wx / N), cz = Math.floor(wz / N);
+      const cx = Math.floor(wx / N),
+        cz = Math.floor(wz / N);
       const chunk = world.getChunk(cx, cz);
       if (!chunk) continue;
-      const lx = wx - cx * N, lz = wz - cz * N;
-      if (chunk.skyLight[lx + lz * N + wy * N * N] !== level) continue;
+      const lx = wx - cx * N,
+        lz = wz - cz * N;
+      if (
+        chunk.skyLight[lx + lz * N + wy * N * N] !== level
+      )
+        continue;
 
       const newLevel = level - 1;
       for (const [dx, dy, dz] of DIRS) {
-        const nx = wx + dx, ny = wy + dy, nz = wz + dz;
+        const nx = wx + dx,
+          ny = wy + dy,
+          nz = wz + dz;
         if (ny < 0 || ny >= N) continue; // bedrock / above world
 
-        const ncx = Math.floor(nx / N), ncz = Math.floor(nz / N);
+        const ncx = Math.floor(nx / N),
+          ncz = Math.floor(nz / N);
         const nchunk = world.getChunk(ncx, ncz);
         if (!nchunk) continue; // unloaded chunk
 
-        const nlx = nx - ncx * N, nlz = nz - ncz * N;
-        if (isOpaque(nchunk.getBlock(nlx, ny, nlz))) continue;
+        const nlx = nx - ncx * N,
+          nlz = nz - ncz * N;
+        if (isOpaque(nchunk.getBlock(nlx, ny, nlz)))
+          continue;
 
         const ni = nlx + nlz * N + ny * N * N;
         if (nchunk.skyLight[ni] < newLevel) {
           nchunk.skyLight[ni] = newLevel;
-          if (newLevel > 0) skyQueue[newLevel].push([nx, ny, nz]);
+          if (newLevel > 0)
+            skyQueue[newLevel].push([nx, ny, nz]);
         }
       }
     }
@@ -114,11 +132,16 @@ export function recomputeWorldLight(world: World): void {
     for (let lx = 0; lx < N; lx++) {
       for (let ly = 0; ly < N; ly++) {
         for (let lz = 0; lz < N; lz++) {
-          const emission = BLOCK_EMISSION[chunk.getBlock(lx, ly, lz)] ?? 0;
+          const emission =
+            BLOCK_EMISSION[chunk.getBlock(lx, ly, lz)] ?? 0;
           if (emission > 0) {
             const i = lx + lz * N + ly * N * N;
             chunk.blockLight[i] = emission;
-            blockQueue[emission].push([bx + lx, ly, bz + lz]);
+            blockQueue[emission].push([
+              bx + lx,
+              ly,
+              bz + lz,
+            ]);
           }
         }
       }
@@ -127,28 +150,39 @@ export function recomputeWorldLight(world: World): void {
 
   for (let level = 15; level >= 1; level--) {
     for (const [wx, wy, wz] of blockQueue[level]) {
-      const cx = Math.floor(wx / N), cz = Math.floor(wz / N);
+      const cx = Math.floor(wx / N),
+        cz = Math.floor(wz / N);
       const chunk = world.getChunk(cx, cz);
       if (!chunk) continue;
-      const lx = wx - cx * N, lz = wz - cz * N;
-      if (chunk.blockLight[lx + lz * N + wy * N * N] !== level) continue;
+      const lx = wx - cx * N,
+        lz = wz - cz * N;
+      if (
+        chunk.blockLight[lx + lz * N + wy * N * N] !== level
+      )
+        continue;
 
       const newLevel = level - 1;
       for (const [dx, dy, dz] of DIRS) {
-        const nx = wx + dx, ny = wy + dy, nz = wz + dz;
+        const nx = wx + dx,
+          ny = wy + dy,
+          nz = wz + dz;
         if (ny < 0 || ny >= N) continue;
 
-        const ncx = Math.floor(nx / N), ncz = Math.floor(nz / N);
+        const ncx = Math.floor(nx / N),
+          ncz = Math.floor(nz / N);
         const nchunk = world.getChunk(ncx, ncz);
         if (!nchunk) continue;
 
-        const nlx = nx - ncx * N, nlz = nz - ncz * N;
-        if (isOpaque(nchunk.getBlock(nlx, ny, nlz))) continue;
+        const nlx = nx - ncx * N,
+          nlz = nz - ncz * N;
+        if (isOpaque(nchunk.getBlock(nlx, ny, nlz)))
+          continue;
 
         const ni = nlx + nlz * N + ny * N * N;
         if (nchunk.blockLight[ni] < newLevel) {
           nchunk.blockLight[ni] = newLevel;
-          if (newLevel > 0) blockQueue[newLevel].push([nx, ny, nz]);
+          if (newLevel > 0)
+            blockQueue[newLevel].push([nx, ny, nz]);
         }
       }
     }

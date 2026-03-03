@@ -31,24 +31,45 @@ export function mountTitleScreen(
     () => (
       <div class="fixed inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_20%_20%,#2a3748_0%,#0f1219_40%,#07090d_100%)] text-white">
         <div class="w-[min(92vw,760px)] rounded-xl border border-white/15 bg-black/35 backdrop-blur-md p-6">
-          <h1 class="text-4xl font-bold tracking-wide">Voxxer</h1>
-          <p class="text-white/70 mt-1">Choose a world or create a new one.</p>
+          <h1 class="text-4xl font-bold tracking-wide">
+            Voxxer
+          </h1>
+          <p class="text-white/70 mt-1">
+            Choose a world or create a new one.
+          </p>
 
           <div class="mt-5 rounded-lg border border-white/10 bg-black/30 max-h-72 overflow-y-auto">
             <Show
               when={state().saves.length > 0}
-              fallback={<p class="p-4 text-white/60 text-sm">No saves yet. Create your first world.</p>}
+              fallback={
+                <p class="p-4 text-white/60 text-sm">
+                  No saves yet. Create your first world.
+                </p>
+              }
             >
               <div class="divide-y divide-white/10">
                 <For each={state().saves}>
                   {(save) => (
                     <button
                       class="w-full text-left px-4 py-3 hover:bg-white/8 transition-colors"
-                      classList={{ "bg-white/15": state().selectedSaveId === save.id }}
-                      onClick={() => handlers.onSelectSave(save.id)}
+                      classList={{
+                        "bg-white/15":
+                          state().selectedSaveId ===
+                          save.id,
+                      }}
+                      onClick={() =>
+                        handlers.onSelectSave(save.id)
+                      }
                     >
-                      <div class="font-semibold">{save.name}</div>
-                      <div class="text-xs text-white/55">Updated {new Date(save.updatedAtMs).toLocaleString()}</div>
+                      <div class="font-semibold">
+                        {save.name}
+                      </div>
+                      <div class="text-xs text-white/55">
+                        Updated{" "}
+                        {new Date(
+                          save.updatedAtMs,
+                        ).toLocaleString()}
+                      </div>
                     </button>
                   )}
                 </For>
@@ -64,7 +85,10 @@ export function mountTitleScreen(
             >
               Continue
             </button>
-            <button class="btn btn-soft btn-secondary" onClick={handlers.onCreateWorld}>
+            <button
+              class="btn btn-soft btn-secondary"
+              onClick={handlers.onCreateWorld}
+            >
               New World
             </button>
             <button

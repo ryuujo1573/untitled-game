@@ -5,12 +5,19 @@ import { World } from "./world/world";
 import { BlockType } from "./world/block";
 import { raycast } from "./raycaster";
 import { PauseMenu } from "./pause-menu";
-import { InputBackend, isTauriRuntime } from "./input-backend";
+import {
+  InputBackend,
+  isTauriRuntime,
+} from "./input-backend";
 import { WebInputManager } from "./web-input";
 import { NativeInputManager } from "./native-input";
 
 /** Called after a block is placed or broken so the renderer can re-upload the chunk. */
-export type BlockEditCallback = (wx: number, wy: number, wz: number) => void;
+export type BlockEditCallback = (
+  wx: number,
+  wy: number,
+  wz: number,
+) => void;
 
 /** Cycle order for the held block type (press E to advance). */
 const PLACE_CYCLE: BlockType[] = [
@@ -104,7 +111,10 @@ export class InputManager {
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     this.disposers.push(() =>
-      window.removeEventListener("beforeunload", onBeforeUnload),
+      window.removeEventListener(
+        "beforeunload",
+        onBeforeUnload,
+      ),
     );
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -122,16 +132,25 @@ export class InputManager {
         return;
       }
       // Cycle held block type with E.
-      if (e.code === "KeyE" && this.inputBackend.isLocked()) {
-        this.placeTypeIndex = (this.placeTypeIndex + 1) % PLACE_CYCLE.length;
+      if (
+        e.code === "KeyE" &&
+        this.inputBackend.isLocked()
+      ) {
+        this.placeTypeIndex =
+          (this.placeTypeIndex + 1) % PLACE_CYCLE.length;
         updateHotbar(PLACE_CYCLE[this.placeTypeIndex]);
       }
     };
-    const onKeyUp = (e: KeyboardEvent) => this.keys.delete(e.code);
+    const onKeyUp = (e: KeyboardEvent) =>
+      this.keys.delete(e.code);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    this.disposers.push(() => window.removeEventListener("keydown", onKeyDown));
-    this.disposers.push(() => window.removeEventListener("keyup", onKeyUp));
+    this.disposers.push(() =>
+      window.removeEventListener("keydown", onKeyDown),
+    );
+    this.disposers.push(() =>
+      window.removeEventListener("keyup", onKeyUp),
+    );
 
     // Left-click: request pointer lock when not locked; break block when locked.
     // Right-click: place block when locked.
@@ -148,7 +167,12 @@ export class InputManager {
       if (!hit) return;
       if (e.button === 0) {
         // Break
-        this.world.setBlock(hit.bx, hit.by, hit.bz, BlockType.Air);
+        this.world.setBlock(
+          hit.bx,
+          hit.by,
+          hit.bz,
+          BlockType.Air,
+        );
         this.onBlockEdit(hit.bx, hit.by, hit.bz);
       } else if (e.button === 2) {
         // Place on the face normal
@@ -156,35 +180,62 @@ export class InputManager {
         const py = hit.by + hit.ny;
         const pz = hit.bz + hit.nz;
         // Don't place inside the player.
-        if (!this.world.setBlock(px, py, pz, this.placeBlockType)) return;
+        if (
+          !this.world.setBlock(
+            px,
+            py,
+            pz,
+            this.placeBlockType,
+          )
+        )
+          return;
         this.onBlockEdit(px, py, pz);
       }
     };
     canvas.addEventListener("mousedown", onMouseDown);
-    this.disposers.push(() => canvas.removeEventListener("mousedown", onMouseDown));
+    this.disposers.push(() =>
+      canvas.removeEventListener("mousedown", onMouseDown),
+    );
     // Suppress right-click context menu.
-    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+    const onContextMenu = (e: MouseEvent) =>
+      e.preventDefault();
     canvas.addEventListener("contextmenu", onContextMenu);
     this.disposers.push(() =>
-      canvas.removeEventListener("contextmenu", onContextMenu),
+      canvas.removeEventListener(
+        "contextmenu",
+        onContextMenu,
+      ),
     );
 
     const onClick = () => {
-      if (!this.inputBackend.isLocked()) this.inputBackend.requestLock();
+      if (!this.inputBackend.isLocked())
+        this.inputBackend.requestLock();
     };
     canvas.addEventListener("click", onClick);
-    this.disposers.push(() => canvas.removeEventListener("click", onClick));
+    this.disposers.push(() =>
+      canvas.removeEventListener("click", onClick),
+    );
 
     // Handle standard pointer lock escape for pause menu
     const onPointerLockChange = () => {
-        if (!document.pointerLockElement && !this.pauseMenu.paused && !this.nativeMode) {
-            this.keys.clear();
-            this.pauseMenu.pause();
-        }
+      if (
+        !document.pointerLockElement &&
+        !this.pauseMenu.paused &&
+        !this.nativeMode
+      ) {
+        this.keys.clear();
+        this.pauseMenu.pause();
+      }
     };
-    document.addEventListener("pointerlockchange", onPointerLockChange);
+    document.addEventListener(
+      "pointerlockchange",
+      onPointerLockChange,
+    );
     this.disposers.push(() =>
-      document.removeEventListener("pointerlockchange", onPointerLockChange),
+      document.removeEventListener(
+        "pointerlockchange",
+        onPointerLockChange,
+      ),
     );
 
     const onBlur = () => {
@@ -197,7 +248,9 @@ export class InputManager {
       }
     };
     window.addEventListener("blur", onBlur);
-    this.disposers.push(() => window.removeEventListener("blur", onBlur));
+    this.disposers.push(() =>
+      window.removeEventListener("blur", onBlur),
+    );
   }
 
   /** Call this (e.g. from the pause menu resume callback) to re-acquire the cursor. */
@@ -210,22 +263,29 @@ export class InputManager {
     if (this.pauseMenu.paused) return;
 
     // Use backend to update camera rotation
-    this.inputBackend.update(this.camera, this.sensitivityMultiplier);
+    this.inputBackend.update(
+      this.camera,
+      this.sensitivityMultiplier,
+    );
 
     const fwd = this.camera.getFlatForward();
     const right = this.camera.getRight();
 
     // Build wish direction from held keys.
     vec3.set(this.wish, 0, 0, 0);
-    if (this.keys.has("KeyW")) vec3.scaleAndAdd(this.wish, this.wish, fwd, 1);
-    if (this.keys.has("KeyS")) vec3.scaleAndAdd(this.wish, this.wish, fwd, -1);
-    if (this.keys.has("KeyD")) vec3.scaleAndAdd(this.wish, this.wish, right, 1);
+    if (this.keys.has("KeyW"))
+      vec3.scaleAndAdd(this.wish, this.wish, fwd, 1);
+    if (this.keys.has("KeyS"))
+      vec3.scaleAndAdd(this.wish, this.wish, fwd, -1);
+    if (this.keys.has("KeyD"))
+      vec3.scaleAndAdd(this.wish, this.wish, right, 1);
     if (this.keys.has("KeyA"))
       vec3.scaleAndAdd(this.wish, this.wish, right, -1);
 
     // Basic gamepad support: left stick for movement, right stick for look.
     try {
-      const pads = navigator.getGamepads && navigator.getGamepads();
+      const pads =
+        navigator.getGamepads && navigator.getGamepads();
       if (pads && pads.length) {
         for (const p of pads) {
           if (!p) continue;
@@ -235,23 +295,38 @@ export class InputManager {
           const ry = p.axes[3] ?? 0;
           // Deadzone
           const dead = 0.15;
-          const apply = (v: number) => (Math.abs(v) > dead ? v : 0);
+          const apply = (v: number) =>
+            Math.abs(v) > dead ? v : 0;
           const ax = apply(lx);
           const ay = apply(ly);
           if (ax !== 0 || ay !== 0) {
-            vec3.scaleAndAdd(this.wish, this.wish, right, ax);
-            vec3.scaleAndAdd(this.wish, this.wish, fwd, -ay);
+            vec3.scaleAndAdd(
+              this.wish,
+              this.wish,
+              right,
+              ax,
+            );
+            vec3.scaleAndAdd(
+              this.wish,
+              this.wish,
+              fwd,
+              -ay,
+            );
           }
           if (rx !== 0 || ry !== 0) {
             const lookScale = 6.0; // tune how quickly gamepad looks
-            this.camera.rotate(rx * lookScale * this.sensitivityMultiplier, ry * lookScale * this.sensitivityMultiplier);
+            this.camera.rotate(
+              rx * lookScale * this.sensitivityMultiplier,
+              ry * lookScale * this.sensitivityMultiplier,
+            );
           }
         }
       }
     } catch {}
 
     // Normalise diagonal movement so it isn't faster than cardinal.
-    if (vec3.length(this.wish) > 0) vec3.normalize(this.wish, this.wish);
+    if (vec3.length(this.wish) > 0)
+      vec3.normalize(this.wish, this.wish);
 
     // Jump request is handled inside Physics (only fires when onGround).
     if (this.keys.has("Space")) this.physics.jump();

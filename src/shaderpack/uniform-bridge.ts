@@ -12,10 +12,15 @@ export interface IrisFrameUniformSnapshot {
   fogEnd: number;
 }
 
-export function createIrisFrameUniformSnapshot(input: IrisFrameUniformSnapshot): IrisFrameUniformSnapshot {
+export function createIrisFrameUniformSnapshot(
+  input: IrisFrameUniformSnapshot,
+): IrisFrameUniformSnapshot {
   return {
     ...input,
-    worldTime: Math.max(0, Math.min(23999, input.worldTime)),
+    worldTime: Math.max(
+      0,
+      Math.min(23999, input.worldTime),
+    ),
     near: Math.max(0.001, input.near),
     far: Math.max(input.near + 1, input.far),
   };

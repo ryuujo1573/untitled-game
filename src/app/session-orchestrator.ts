@@ -5,12 +5,20 @@ import type { GameSaveV1 } from "~/game/session-types";
 import type { IRenderer } from "~/renderer-interface";
 import { WebGLRenderer } from "~/renderer";
 import { WebGPURenderer } from "~/webgpu/renderer";
-import { mountTitleScreen, type TitleScreenController } from "~/title-screen";
+import {
+  mountTitleScreen,
+  type TitleScreenController,
+} from "~/title-screen";
 import type { QuitToTitleIntent } from "~/pause-menu";
 
 type BackendKind = "webgpu" | "webgl";
 
-function stripManagedFields(save: GameSaveV1): Omit<GameSaveV1, "id" | "name" | "createdAtMs" | "updatedAtMs"> {
+function stripManagedFields(
+  save: GameSaveV1,
+): Omit<
+  GameSaveV1,
+  "id" | "name" | "createdAtMs" | "updatedAtMs"
+> {
   return {
     version: save.version,
     world: save.world,
@@ -31,7 +39,10 @@ export class SessionOrchestrator {
   private activeRenderer: IRenderer | null = null;
   private backend: BackendKind | null = null;
 
-  constructor(canvas: HTMLCanvasElement, titleRoot: HTMLElement) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    titleRoot: HTMLElement,
+  ) {
     this.canvas = canvas;
     this.titleRoot = titleRoot;
   }
@@ -47,9 +58,14 @@ export class SessionOrchestrator {
         },
         onContinue: () => {
           if (!this.selectedSaveId) return;
-          this.playSave(this.selectedSaveId).catch((err) => {
-            console.error("Failed to continue save:", err);
-          });
+          this.playSave(this.selectedSaveId).catch(
+            (err) => {
+              console.error(
+                "Failed to continue save:",
+                err,
+              );
+            },
+          );
         },
         onCreateWorld: () => {
           this.createWorldAndPlay().catch((err) => {
@@ -89,14 +105,19 @@ export class SessionOrchestrator {
 
   private async createWorldAndPlay(): Promise<void> {
     const worldName = this.nextWorldName();
-    const save = this.store.create(worldName, createGeneratedSave(worldName));
+    const save = this.store.create(
+      worldName,
+      createGeneratedSave(worldName),
+    );
     this.selectedSaveId = save.id;
     this.refreshTitle();
     await this.playSave(save.id);
   }
 
   private nextWorldName(): string {
-    const existingNames = new Set(this.store.list().map((s) => s.name));
+    const existingNames = new Set(
+      this.store.list().map((s) => s.name),
+    );
     let index = 1;
     while (existingNames.has(`World ${index}`)) index++;
     return `World ${index}`;
@@ -121,7 +142,9 @@ export class SessionOrchestrator {
     const current = this.store.get(this.selectedSaveId);
     if (!current) return;
 
-    const confirmed = window.confirm(`Delete save \"${current.name}\"?`);
+    const confirmed = window.confirm(
+      `Delete save \"${current.name}\"?`,
+    );
     if (!confirmed) return;
 
     this.store.remove(this.selectedSaveId);
@@ -139,11 +162,15 @@ export class SessionOrchestrator {
     this.activeRenderer = null;
 
     const hooks = {
-      onQuitRequested: (intent: QuitToTitleIntent) => this.handleQuit(intent),
+      onQuitRequested: (intent: QuitToTitleIntent) =>
+        this.handleQuit(intent),
     };
 
     try {
-      const renderer = await this.startRendererSession(save, hooks);
+      const renderer = await this.startRendererSession(
+        save,
+        hooks,
+      );
       this.activeRenderer = renderer;
     } catch (err) {
       this.setMode("title");
@@ -154,7 +181,9 @@ export class SessionOrchestrator {
 
   private async startRendererSession(
     save: GameSaveV1,
-    hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+    hooks: {
+      onQuitRequested: (intent: QuitToTitleIntent) => void;
+    },
   ): Promise<IRenderer> {
     if (this.backend === "webgpu") {
       const renderer = new WebGPURenderer(this.canvas);
@@ -178,12 +207,18 @@ export class SessionOrchestrator {
         return renderer;
       } catch (err) {
         renderer.destroy();
-        console.warn("WebGPU failed, falling back to WebGL2:", err);
+        console.warn(
+          "WebGPU failed, falling back to WebGL2:",
+          err,
+        );
       }
     }
 
     const gl = initializeCanvas("webglCanvas");
-    if (!gl) throw new Error("Neither WebGPU nor WebGL2 is available");
+    if (!gl)
+      throw new Error(
+        "Neither WebGPU nor WebGL2 is available",
+      );
     const renderer = new WebGLRenderer(gl);
     await renderer.startSession(save, hooks);
     this.backend = "webgl";
@@ -196,10 +231,17 @@ export class SessionOrchestrator {
 
     if (intent === "save" && this.selectedSaveId) {
       try {
-        const snapshot = this.activeRenderer.captureSession();
-        this.store.update(this.selectedSaveId, stripManagedFields(snapshot));
+        const snapshot =
+          this.activeRenderer.captureSession();
+        this.store.update(
+          this.selectedSaveId,
+          stripManagedFields(snapshot),
+        );
       } catch (err) {
-        console.error("Failed to save session before quitting to title:", err);
+        console.error(
+          "Failed to save session before quitting to title:",
+          err,
+        );
       }
     }
 
@@ -210,13 +252,18 @@ export class SessionOrchestrator {
   }
 }
 
-export function startSessionOrchestrator(canvas: HTMLCanvasElement): SessionOrchestrator {
+export function startSessionOrchestrator(
+  canvas: HTMLCanvasElement,
+): SessionOrchestrator {
   const titleRoot = document.getElementById("title-root");
   if (!titleRoot) {
     throw new Error("Missing #title-root mount node");
   }
 
-  const orchestrator = new SessionOrchestrator(canvas, titleRoot);
+  const orchestrator = new SessionOrchestrator(
+    canvas,
+    titleRoot,
+  );
   orchestrator.start();
   return orchestrator;
 }

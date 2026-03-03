@@ -41,7 +41,15 @@ interface SliceDef {
 // that TBN correctly maps the atlas _n texture to world/view space.
 // Face order follows BlockFaceTile: [+Y, -Y, +X, -X, +Z, -Z].
 const FACE_TBN: ReadonlyArray<
-  readonly [number, number, number, number, number, number, number]
+  readonly [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ]
 > = [
   [0, 1, 0, 1, 0, 0, -1], // 0: +Y
   [0, -1, 0, 1, 0, 0, 1], // 1: -Y
@@ -173,12 +181,24 @@ export class Chunk {
   }
 
   getBlock(x: number, y: number, z: number): BlockType {
-    if (x < 0 || x >= N || y < 0 || y >= N || z < 0 || z >= N)
+    if (
+      x < 0 ||
+      x >= N ||
+      y < 0 ||
+      y >= N ||
+      z < 0 ||
+      z >= N
+    )
       return BlockType.Air;
     return this.blocks[idx(x, y, z)] as BlockType;
   }
 
-  setBlock(x: number, y: number, z: number, type: BlockType): void {
+  setBlock(
+    x: number,
+    y: number,
+    z: number,
+    type: BlockType,
+  ): void {
     this.blocks[idx(x, y, z)] = type;
   }
 
@@ -188,7 +208,8 @@ export class Chunk {
    */
   getSkyLight(x: number, y: number, z: number): number {
     if (y >= N) return 15; // above world = full sky
-    if (x < 0 || x >= N || y < 0 || z < 0 || z >= N) return 0;
+    if (x < 0 || x >= N || y < 0 || z < 0 || z >= N)
+      return 0;
     return this.skyLight[idx(x, y, z)];
   }
 
@@ -197,7 +218,15 @@ export class Chunk {
    * Out-of-bounds → 0 (no emissive source outside loaded chunk).
    */
   getBlockLight(x: number, y: number, z: number): number {
-    if (x < 0 || x >= N || y < 0 || y >= N || z < 0 || z >= N) return 0;
+    if (
+      x < 0 ||
+      x >= N ||
+      y < 0 ||
+      y >= N ||
+      z < 0 ||
+      z >= N
+    )
+      return 0;
     return this.blockLight[idx(x, y, z)];
   }
 
@@ -260,8 +289,15 @@ export class Chunk {
     const coord = [0, 0, 0];
 
     for (const sl of SLICES) {
-      const { faceIndex, sliceAxis, dim0, dim1, neighbor, normalSign, light } =
-        sl;
+      const {
+        faceIndex,
+        sliceAxis,
+        dim0,
+        dim1,
+        neighbor,
+        normalSign,
+        light,
+      } = sl;
 
       for (let s = 0; s < N; s++) {
         // ── 1. Build visibility mask for this slice ─────────────
@@ -271,22 +307,30 @@ export class Chunk {
             coord[sliceAxis] = s;
             coord[dim0] = i;
             coord[dim1] = j;
-            const block = this.getBlock(coord[0], coord[1], coord[2]);
+            const block = this.getBlock(
+              coord[0],
+              coord[1],
+              coord[2],
+            );
             if (block === BlockType.Air) continue;
 
             // Check the block on the outward side — must be Air.
             const nx = coord[0] + neighbor[0];
             const ny = coord[1] + neighbor[1];
             const nz = coord[2] + neighbor[2];
-            if (this.getBlock(nx, ny, nz) !== BlockType.Air) continue;
+            if (this.getBlock(nx, ny, nz) !== BlockType.Air)
+              continue;
 
             // Sample light at the air-side neighbor block.
             const skyL = this.getSkyLight(nx, ny, nz);
             const blockL = this.getBlockLight(nx, ny, nz);
 
-            const faceTiles = BlockFaceTile[block] ?? [3, 3, 3, 3, 3, 3];
+            const faceTiles = BlockFaceTile[block] ?? [
+              3, 3, 3, 3, 3, 3,
+            ];
             const tileIdx = faceTiles[faceIndex];
-            mask[i + j * N] = tileIdx | (skyL << 4) | (blockL << 8);
+            mask[i + j * N] =
+              tileIdx | (skyL << 4) | (blockL << 8);
           }
         }
 
@@ -311,7 +355,10 @@ export class Chunk {
             let h = 1;
             expand: while (j + h < N) {
               for (let k = i; k < i + w; k++) {
-                if (used[k + (j + h) * N] || mask[k + (j + h) * N] !== encoded)
+                if (
+                  used[k + (j + h) * N] ||
+                  mask[k + (j + h) * N] !== encoded
+                )
                   break expand;
               }
               h++;
@@ -319,7 +366,8 @@ export class Chunk {
 
             // Mark merged cells as used.
             for (let dj = 0; dj < h; dj++)
-              for (let di = 0; di < w; di++) used[i + di + (j + dj) * N] = 1;
+              for (let di = 0; di < w; di++)
+                used[i + di + (j + dj) * N] = 1;
 
             // Decode tile and light from the encoded mask value.
             const tileIdx = encoded & 0xf;
@@ -332,7 +380,11 @@ export class Chunk {
 
             // Build a position from (slicePos, dim0Pos, dim1Pos).
             type V3 = [number, number, number];
-            const p = (sa: number, da: number, db: number): V3 => {
+            const p = (
+              sa: number,
+              da: number,
+              db: number,
+            ): V3 => {
               const c: V3 = [0, 0, 0];
               c[sliceAxis] = sa;
               c[dim0] = da;

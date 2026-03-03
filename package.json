@@ -16,6 +16,7 @@
     "build:tauri": "tauri build"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.5",
     "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/cli": "^2.2.5",
     "@types/pngjs": "^6.0.5",

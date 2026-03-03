@@ -19,28 +19,54 @@ import { getShaderpackStateSnapshot } from "~/shaderpack/runtime";
  *  Returns null if the point is behind the camera or outside the frustum.
  *  viewMat / projMat are column-major Float32Array (gl-matrix convention). */
 function worldToScreen(
-  wx: number, wy: number, wz: number,
-  view: Float32Array, proj: Float32Array,
-  sw: number, sh: number,
+  wx: number,
+  wy: number,
+  wz: number,
+  view: Float32Array,
+  proj: Float32Array,
+  sw: number,
+  sh: number,
 ): [number, number] | null {
   // view * [wx, wy, wz, 1]  (column-major: result.x = col0·v + col4·v + ...)
-  const vx = view[0]*wx + view[4]*wy + view[8] *wz + view[12];
-  const vy = view[1]*wx + view[5]*wy + view[9] *wz + view[13];
-  const vz = view[2]*wx + view[6]*wy + view[10]*wz + view[14];
-  const vw = view[3]*wx + view[7]*wy + view[11]*wz + view[15];
+  const vx =
+    view[0] * wx + view[4] * wy + view[8] * wz + view[12];
+  const vy =
+    view[1] * wx + view[5] * wy + view[9] * wz + view[13];
+  const vz =
+    view[2] * wx + view[6] * wy + view[10] * wz + view[14];
+  const vw =
+    view[3] * wx + view[7] * wy + view[11] * wz + view[15];
 
   if (vz >= -0.1) return null; // behind or on near plane
 
   // proj * [vx, vy, vz, vw]
-  const cx = proj[0]*vx + proj[4]*vy + proj[8] *vz + proj[12]*vw;
-  const cy = proj[1]*vx + proj[5]*vy + proj[9] *vz + proj[13]*vw;
-  const cw = proj[3]*vx + proj[7]*vy + proj[11]*vz + proj[15]*vw;
+  const cx =
+    proj[0] * vx +
+    proj[4] * vy +
+    proj[8] * vz +
+    proj[12] * vw;
+  const cy =
+    proj[1] * vx +
+    proj[5] * vy +
+    proj[9] * vz +
+    proj[13] * vw;
+  const cw =
+    proj[3] * vx +
+    proj[7] * vy +
+    proj[11] * vz +
+    proj[15] * vw;
 
   const ndcX = cx / cw;
   const ndcY = cy / cw;
 
   // Clip a generous margin (labels near edge can still be useful)
-  if (ndcX < -1.1 || ndcX > 1.1 || ndcY < -1.1 || ndcY > 1.1) return null;
+  if (
+    ndcX < -1.1 ||
+    ndcX > 1.1 ||
+    ndcY < -1.1 ||
+    ndcY > 1.1
+  )
+    return null;
 
   return [(ndcX + 1) * 0.5 * sw, (1 - ndcY) * 0.5 * sh];
 }
@@ -74,15 +100,29 @@ export interface RenderStats {
 
 // ── Cardinal direction table ────────────────────────────────────
 // yaw=0 → looking -Z = North, yaw=π/2 → looking +X = East
-const CARDINALS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
+const CARDINALS = [
+  "N",
+  "NE",
+  "E",
+  "SE",
+  "S",
+  "SW",
+  "W",
+  "NW",
+] as const;
 
 function toCardinal(yaw: number): string {
-  const a = ((yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const a =
+    ((yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
   const i = Math.round((a / (Math.PI * 2)) * 8) % 8;
   return CARDINALS[i];
 }
 
-function faceLabel(nx: number, ny: number, nz: number): string {
+function faceLabel(
+  nx: number,
+  ny: number,
+  nz: number,
+): string {
   if (nx !== 0) return nx > 0 ? "+X (East)" : "-X (West)";
   if (ny !== 0) return ny > 0 ? "+Y (Top)" : "-Y (Bottom)";
   return nz > 0 ? "+Z (South)" : "-Z (North)";
@@ -104,21 +144,32 @@ function getBrowserInfo(ua: string): string {
 }
 
 // ── Browser engine detection ────────────────────────────────────
-type BrowserEngine = "chromium" | "firefox" | "safari" | "unknown";
+type BrowserEngine =
+  | "chromium"
+  | "firefox"
+  | "safari"
+  | "unknown";
 
 function detectEngine(ua: string): BrowserEngine {
   if (/Firefox\//.test(ua)) return "firefox";
   // Safari but not Chrome-based
-  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return "safari";
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua))
+    return "safari";
   // Chrome, Edge, Opera, etc. (Blink-based)
   if (/Chrome\//.test(ua)) return "chromium";
   return "unknown";
 }
 
 // ── SolidJS badges rendered once into the debug panel ──────────
-const ICON_STYLE = { width: "1em", height: "1em", "vertical-align": "middle" };
+const ICON_STYLE = {
+  width: "1em",
+  height: "1em",
+  "vertical-align": "middle",
+};
 
-const BrowserIcon: Component<{ engine: BrowserEngine }> = (props) => {
+const BrowserIcon: Component<{ engine: BrowserEngine }> = (
+  props,
+) => {
   switch (props.engine) {
     case "chromium":
       return <IconBrandChrome style={ICON_STYLE} />;
@@ -131,17 +182,26 @@ const BrowserIcon: Component<{ engine: BrowserEngine }> = (props) => {
   }
 };
 
-const DebugBadges: Component<{ engine: BrowserEngine; isTauri: boolean }> = (
-  props,
-) => (
+const DebugBadges: Component<{
+  engine: BrowserEngine;
+  isTauri: boolean;
+}> = (props) => (
   <span
-    style={{ display: "inline-flex", "align-items": "center", gap: "0.4em" }}
+    style={{
+      display: "inline-flex",
+      "align-items": "center",
+      gap: "0.4em",
+    }}
   >
     <Show when={props.isTauri}>
       <img
         src="/tauri.svg"
         alt="Tauri"
-        style={{ width: "1em", height: "1em", "vertical-align": "middle" }}
+        style={{
+          width: "1em",
+          height: "1em",
+          "vertical-align": "middle",
+        }}
       />
     </Show>
     <BrowserIcon engine={props.engine} />
@@ -191,7 +251,10 @@ interface DebugState {
   };
 }
 
-const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
+const DebugUI: Component<{
+  state: DebugState;
+  visible: boolean;
+}> = (props) => {
   return (
     <Show when={props.visible}>
       <aside class="fixed top-2 left-2 flex flex-row items-start gap-2.5 pointer-events-none select-none z-20">
@@ -204,12 +267,16 @@ const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
           <dd>{props.state.fps}</dd>
           <dt>Chunks</dt>
           <dd>
-            {props.state.drawCalls} / {props.state.totalChunks} (
-            {props.state.totalChunks - props.state.drawCalls} culled)
+            {props.state.drawCalls} /{" "}
+            {props.state.totalChunks} (
+            {props.state.totalChunks -
+              props.state.drawCalls}{" "}
+            culled)
           </dd>
           <dt>Verts</dt>
           <dd>
-            {(props.state.drawnVertices / 1000).toFixed(1)}k /{" "}
+            {(props.state.drawnVertices / 1000).toFixed(1)}k
+            /{" "}
             {(props.state.totalVertices / 1000).toFixed(1)}k
           </dd>
           <dt>Time</dt>
@@ -223,12 +290,14 @@ const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
           </header>
           <dt>XYZ</dt>
           <dd>
-            {props.state.pos[0].toFixed(2)}, {props.state.pos[1].toFixed(2)},{" "}
+            {props.state.pos[0].toFixed(2)},{" "}
+            {props.state.pos[1].toFixed(2)},{" "}
             {props.state.pos[2].toFixed(2)}
           </dd>
           <dt>Block</dt>
           <dd>
-            {Math.floor(props.state.pos[0])}, {Math.floor(props.state.pos[1])},{" "}
+            {Math.floor(props.state.pos[0])},{" "}
+            {Math.floor(props.state.pos[1])},{" "}
             {Math.floor(props.state.pos[2])}
           </dd>
 
@@ -255,11 +324,13 @@ const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
               <>
                 <dt>Type</dt>
                 <dd>
-                  {t().typeName} ({t().bx}, {t().by}, {t().bz})
+                  {t().typeName} ({t().bx}, {t().by},{" "}
+                  {t().bz})
                 </dd>
                 <dt>Chunk</dt>
                 <dd>
-                  ({t().cx}, {t().cz}) local ({t().lx}, {t().by}, {t().lz})
+                  ({t().cx}, {t().cz}) local ({t().lx},{" "}
+                  {t().by}, {t().lz})
                 </dd>
                 <dt>Face</dt>
                 <dd>{t().face}</dd>
@@ -272,12 +343,15 @@ const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
             System
           </header>
           <dt>GPU</dt>
-          <dd class="break-all">{props.state.sysInfo.gpu}</dd>
+          <dd class="break-all">
+            {props.state.sysInfo.gpu}
+          </dd>
           <dt>Vendor</dt>
           <dd>{props.state.sysInfo.vendor}</dd>
           <dt>Texture</dt>
           <dd>
-            {props.state.sysInfo.maxTex}px VP {props.state.sysInfo.maxViewport}
+            {props.state.sysInfo.maxTex}px VP{" "}
+            {props.state.sysInfo.maxViewport}
           </dd>
           <dt>CPU</dt>
           <dd>{props.state.sysInfo.cpu} logical cores</dd>
@@ -289,31 +363,43 @@ const DebugUI: Component<{ state: DebugState; visible: boolean }> = (props) => {
               engine={props.state.sysInfo.engine}
               isTauri={props.state.sysInfo.isTauri}
             />
-            <span class="truncate max-w-40" title={props.state.sysInfo.browser}>
+            <span
+              class="truncate max-w-40"
+              title={props.state.sysInfo.browser}
+            >
               {props.state.sysInfo.browser}
             </span>
           </dd>
           <dt>OS</dt>
           <dd>{props.state.sysInfo.platform}</dd>
           <dt>Tauri</dt>
-          <dd>{import.meta.isTauri ? "Yes" : "No"} {JSON.stringify(import.meta.isTauri)}</dd>
+          <dd>
+            {import.meta.isTauri ? "Yes" : "No"}{" "}
+            {JSON.stringify(import.meta.isTauri)}
+          </dd>
 
           {/* Shaderpack Section */}
           <header class="col-span-2 text-[#aaa] font-bold mt-3 mb-0.5 border-t border-white/10 pt-1.5">
             Shaderpack
           </header>
           <dt>Active</dt>
-          <dd class="break-all">{props.state.shaderpack.active}</dd>
+          <dd class="break-all">
+            {props.state.shaderpack.active}
+          </dd>
           <dt>Stages</dt>
           <dd>
-            {props.state.shaderpack.overrides}/{props.state.shaderpack.totalStages} override
+            {props.state.shaderpack.overrides}/
+            {props.state.shaderpack.totalStages} override
           </dd>
           <dt>Diag</dt>
           <dd>
-            {props.state.shaderpack.warnings} warnings, {props.state.shaderpack.errors} errors
+            {props.state.shaderpack.warnings} warnings,{" "}
+            {props.state.shaderpack.errors} errors
           </dd>
           <dt>Fallback</dt>
-          <dd class="break-all">{props.state.shaderpack.latestFallback || "—"}</dd>
+          <dd class="break-all">
+            {props.state.shaderpack.latestFallback || "—"}
+          </dd>
         </dl>
       </aside>
     </Show>
@@ -401,7 +487,7 @@ export class DebugOverlay {
       "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:24;display:none";
     document.body.appendChild(lightCanvas);
     this.lightCanvas = lightCanvas;
-    this.lightCtx    = lightCanvas.getContext("2d")!;
+    this.lightCtx = lightCanvas.getContext("2d")!;
 
     const [visible, setVisible] = createSignal(false);
     const [state, setState] = createSignal<DebugState>({
@@ -437,13 +523,14 @@ export class DebugOverlay {
       },
     });
 
-    const [lightDebugVisible, setLightDebug] = createSignal(false);
-    this.visible          = visible;
-    this.setVisible       = setVisible;
-    this.state            = state;
-    this.setState         = setState;
+    const [lightDebugVisible, setLightDebug] =
+      createSignal(false);
+    this.visible = visible;
+    this.setVisible = setVisible;
+    this.state = state;
+    this.setState = setState;
     this.lightDebugVisible = lightDebugVisible;
-    this.setLightDebug     = setLightDebug;
+    this.setLightDebug = setLightDebug;
 
     // Render the UI once
     this.root = document.createElement("div");
@@ -451,30 +538,50 @@ export class DebugOverlay {
     document.body.appendChild(this.root);
 
     this.disposeUI = render(
-      () => <DebugUI state={this.state()} visible={this.visible()} />,
+      () => (
+        <DebugUI
+          state={this.state()}
+          visible={this.visible()}
+        />
+      ),
       this.root,
     );
 
     // ── One-time system / environment snapshot ──────────────────
     // gl may be null when running on the WebGPU backend.
-    const dbgExt = gl?.getExtension("WEBGL_debug_renderer_info") ?? null;
+    const dbgExt =
+      gl?.getExtension("WEBGL_debug_renderer_info") ?? null;
     const gpuRenderer = dbgExt
-      ? (gl!.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL) as string)
-      : (navigator as unknown as { gpu?: { wgslLanguageFeatures?: unknown } })
-            .gpu
+      ? (gl!.getParameter(
+          dbgExt.UNMASKED_RENDERER_WEBGL,
+        ) as string)
+      : (
+            navigator as unknown as {
+              gpu?: { wgslLanguageFeatures?: unknown };
+            }
+          ).gpu
         ? "WebGPU"
         : "—";
     const gpuVendor = dbgExt
-      ? (gl!.getParameter(dbgExt.UNMASKED_VENDOR_WEBGL) as string)
+      ? (gl!.getParameter(
+          dbgExt.UNMASKED_VENDOR_WEBGL,
+        ) as string)
       : "—";
-    const maxTex = gl ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) : 0;
+    const maxTex = gl
+      ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number)
+      : 0;
     const maxViewport = gl
-      ? (gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array).join("×")
+      ? (
+          gl.getParameter(
+            gl.MAX_VIEWPORT_DIMS,
+          ) as Int32Array
+        ).join("×")
       : "—";
 
     const cpuCores = navigator.hardwareConcurrency ?? "—";
     const ramGB =
-      (navigator as unknown as { deviceMemory?: number }).deviceMemory != null
+      (navigator as unknown as { deviceMemory?: number })
+        .deviceMemory != null
         ? `~${(navigator as unknown as { deviceMemory: number }).deviceMemory} GB`
         : "—";
 
@@ -517,7 +624,9 @@ export class DebugOverlay {
         e.preventDefault();
         const ld = !this.lightDebugVisible();
         this.setLightDebug(ld);
-        this.lightCanvas.style.display = ld ? "block" : "none";
+        this.lightCanvas.style.display = ld
+          ? "block"
+          : "none";
       }
     };
 
@@ -526,17 +635,25 @@ export class DebugOverlay {
     };
 
     window.addEventListener("keydown", this.onKeyDown);
-    window.addEventListener("keyup",   this.onKeyUp);
+    window.addEventListener("keyup", this.onKeyUp);
   }
 
-  update(camera: Camera, world: World, stats: RenderStats): void {
-    if (!this.visible() && !this.lightDebugVisible()) return;
+  update(
+    camera: Camera,
+    world: World,
+    stats: RenderStats,
+  ): void {
+    if (!this.visible() && !this.lightDebugVisible())
+      return;
 
     // ── Sync light-canvas pixel resolution to window ─────────────
     const sw = window.innerWidth;
     const sh = window.innerHeight;
-    if (this.lightCanvas.width !== sw || this.lightCanvas.height !== sh) {
-      this.lightCanvas.width  = sw;
+    if (
+      this.lightCanvas.width !== sw ||
+      this.lightCanvas.height !== sh
+    ) {
+      this.lightCanvas.width = sw;
       this.lightCanvas.height = sh;
     }
 
@@ -557,7 +674,9 @@ export class DebugOverlay {
     // ── Time-of-day label ─────────────────────────────────────
     const t = stats.worldTime; // 0..1
     const totalMinutes = Math.floor(t * 24 * 60);
-    const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+    const hh = String(
+      Math.floor(totalMinutes / 60),
+    ).padStart(2, "0");
     const mm = String(totalMinutes % 60).padStart(2, "0");
     const phase =
       t < 0.2
@@ -595,10 +714,14 @@ export class DebugOverlay {
     }
 
     const shaderpack = getShaderpackStateSnapshot();
-    const overrides = shaderpack.stageStatuses.filter((s) => s.mode === "override").length;
-    const latestFallback = [...shaderpack.stageStatuses]
-      .reverse()
-      .find((s) => s.mode === "builtin" && s.reason)?.reason ?? "";
+    const overrides = shaderpack.stageStatuses.filter(
+      (s) => s.mode === "override",
+    ).length;
+    const latestFallback =
+      [...shaderpack.stageStatuses]
+        .reverse()
+        .find((s) => s.mode === "builtin" && s.reason)
+        ?.reason ?? "";
 
     this.setState({
       ...this.state(),
@@ -642,7 +765,9 @@ export class DebugOverlay {
     const [cpx, cpy, cpz] = camera.position;
     const aspect = sw / sh;
     const view = camera.getViewMatrix() as Float32Array;
-    const proj = camera.getProjectionMatrixZO(aspect) as Float32Array;
+    const proj = camera.getProjectionMatrixZO(
+      aspect,
+    ) as Float32Array;
 
     // Scan blocks in a 12-block radius XZ and ±5 Y around the player.
     const RADIUS = 12;
@@ -665,33 +790,53 @@ export class DebugOverlay {
           // Only draw label if there is a solid block here with air above
           const block = world.getBlock(wx, wy, wz);
           if (block === 0 /* Air */) continue;
-          if (world.getBlock(wx, wy + 1, wz) !== 0 /* Air */) continue;
+          if (
+            world.getBlock(wx, wy + 1, wz) !== 0 /* Air */
+          )
+            continue;
 
           // Sample the air block (wy+1) — this is what the face sees
-          const skyL   = world.getSkyLight(wx, wy + 1, wz);
-          const blockL = world.getBlockLight(wx, wy + 1, wz);
+          const skyL = world.getSkyLight(wx, wy + 1, wz);
+          const blockL = world.getBlockLight(
+            wx,
+            wy + 1,
+            wz,
+          );
 
           // Project the top-face centre (block unit = 1 m, face at wy+1)
-          const screen = worldToScreen(wx + 0.5, wy + 1.02, wz + 0.5, view, proj, sw, sh);
+          const screen = worldToScreen(
+            wx + 0.5,
+            wy + 1.02,
+            wz + 0.5,
+            view,
+            proj,
+            sw,
+            sh,
+          );
           if (!screen) continue;
 
           const [scx, scy] = screen;
 
           // Distance-based fade
-          const dist2 = dx*dx + dy*dy + dz*dz;
+          const dist2 = dx * dx + dy * dy + dz * dz;
           if (dist2 > RADIUS * RADIUS) continue;
-          const alpha = Math.max(0.35, 1.0 - Math.sqrt(dist2) / RADIUS);
+          const alpha = Math.max(
+            0.35,
+            1.0 - Math.sqrt(dist2) / RADIUS,
+          );
 
           ctx.globalAlpha = alpha;
 
           const skyStr = skyL.toString();
           const blkStr = blockL.toString();
-          const GAP    = 3; // px gap between the two numbers
+          const GAP = 3; // px gap between the two numbers
 
           const skyW = ctx.measureText(skyStr).width;
           const blkW = ctx.measureText(blkStr).width;
           const totalW = skyW + GAP + blkW;
-          const padX = 3, padY = 2, h = 14;
+          const padX = 3,
+            padY = 2,
+            h = 14;
 
           // Dark background pill behind both numbers
           ctx.globalAlpha = alpha * 0.55;
@@ -699,25 +844,31 @@ export class DebugOverlay {
           ctx.beginPath();
           const rx = scx - totalW / 2 - padX;
           const ry = scy - h / 2 - padY;
-          ctx.roundRect(rx, ry, totalW + padX * 2, h + padY * 2, 3);
+          ctx.roundRect(
+            rx,
+            ry,
+            totalW + padX * 2,
+            h + padY * 2,
+            3,
+          );
           ctx.fill();
           ctx.globalAlpha = alpha;
 
           // Sky value — right half (blue palette), right-aligned at centre - gap/2
           const skyX = scx - GAP / 2;
-          ctx.textAlign   = "right";
+          ctx.textAlign = "right";
           ctx.strokeStyle = "rgba(0,0,0,0.8)";
-          ctx.fillStyle   = skyLightColor(skyL);
+          ctx.fillStyle = skyLightColor(skyL);
           ctx.strokeText(skyStr, skyX, scy + 4);
-          ctx.fillText(skyStr,   skyX, scy + 4);
+          ctx.fillText(skyStr, skyX, scy + 4);
 
           // Block value — left half (amber palette), left-aligned at centre + gap/2
           const blkX = scx + GAP / 2;
-          ctx.textAlign   = "left";
-          ctx.fillStyle   = blockLightColor(blockL);
+          ctx.textAlign = "left";
+          ctx.fillStyle = blockLightColor(blockL);
           ctx.strokeStyle = "rgba(0,0,0,0.8)";
           ctx.strokeText(blkStr, blkX, scy + 4);
-          ctx.fillText(blkStr,   blkX, scy + 4);
+          ctx.fillText(blkStr, blkX, scy + 4);
         }
       }
     }
@@ -759,7 +910,10 @@ export class DebugOverlay {
       // Negative half-axis (dimmed)
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx - (ex - cx) * 0.55, cy - (ey - cy) * 0.55);
+      ctx.lineTo(
+        cx - (ex - cx) * 0.55,
+        cy - (ey - cy) * 0.55,
+      );
       ctx.strokeStyle = ax.neg;
       ctx.lineWidth = 1.5;
       ctx.stroke();
@@ -793,7 +947,7 @@ export class DebugOverlay {
 
   destroy(): void {
     window.removeEventListener("keydown", this.onKeyDown);
-    window.removeEventListener("keyup",   this.onKeyUp);
+    window.removeEventListener("keyup", this.onKeyUp);
     this.disposeUI();
     this.root.remove();
     this.lightCanvas.remove();

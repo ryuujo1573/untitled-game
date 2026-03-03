@@ -31,11 +31,17 @@ import { buildAllAtlasesFromManifest } from "~/atlas";
 import { ResourcePackManager } from "~/resource-pack";
 import { raycast, type RayHit } from "~/raycaster";
 import { Settings } from "~/settings";
-import { PauseMenu, type QuitToTitleIntent } from "~/pause-menu.tsx";
+import {
+  PauseMenu,
+  type QuitToTitleIntent,
+} from "~/pause-menu.tsx";
 import { mountDropOverlay } from "~/drop-overlay";
 import Time from "~/time-manager";
 import type { GameSaveV1 } from "~/game/session-types";
-import { captureFromRuntime, hydrateRuntime } from "~/game/session-codec";
+import {
+  captureFromRuntime,
+  hydrateRuntime,
+} from "~/game/session-codec";
 import { ShaderProgramRegistry } from "~/shaderpack/registry";
 import { STAGE_NAMES } from "~/shaderpack/types";
 import { getShaderpackStateSnapshot } from "~/shaderpack/runtime";
@@ -43,45 +49,112 @@ import { buildCloudMesh } from "~/clouds";
 import { generateDefaultSkyboxEquirect } from "~/skybox";
 
 import gbufTerrainWGSL from "./shaders/gbuffers_terrain.wgsl?raw";
-import deferredWGSL    from "./shaders/deferred_lighting.wgsl?raw";
-import outlineWGSL     from "./shaders/outline.wgsl?raw";
-import tonemapWGSL     from "./shaders/tonemap.wgsl?raw";
-import cloudsWGSL      from "./shaders/clouds.wgsl?raw";
+import deferredWGSL from "./shaders/deferred_lighting.wgsl?raw";
+import outlineWGSL from "./shaders/outline.wgsl?raw";
+import tonemapWGSL from "./shaders/tonemap.wgsl?raw";
+import cloudsWGSL from "./shaders/clouds.wgsl?raw";
 
 // ── Wire-cube geometry (12 edges = 24 vertices) ────────────────────────────
 const WIRE_CUBE: Float32Array = (() => {
   const e = 0.002;
-  const lo = -e, hi = 1.0 + e;
+  const lo = -e,
+    hi = 1.0 + e;
   // prettier-ignore
   return new Float32Array([
-    lo,lo,lo, hi,lo,lo,   hi,lo,lo, hi,lo,hi,
-    hi,lo,hi, lo,lo,hi,   lo,lo,hi, lo,lo,lo,
-    lo,hi,lo, hi,hi,lo,   hi,hi,lo, hi,hi,hi,
-    hi,hi,hi, lo,hi,hi,   lo,hi,hi, lo,hi,lo,
-    lo,lo,lo, lo,hi,lo,   hi,lo,lo, hi,hi,lo,
-    hi,lo,hi, hi,hi,hi,   lo,lo,hi, lo,hi,hi,
+    lo,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    hi,
+    hi,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    lo,
+    lo,
+    lo,
+    lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
+    hi,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
   ]);
 })();
 const WIRE_CUBE_VCOUNT = WIRE_CUBE.length / 3; // 24
 
 // ── Per-chunk GPU resources ────────────────────────────────────────────────
 interface ChunkGPUData {
-  posBuffer:   GPUBuffer;
-  uvlBuffer:   GPUBuffer;
-  norBuffer:   GPUBuffer;  // normals  (vec3f, stride 12)
-  tanBuffer:   GPUBuffer;  // tangents (vec4f, stride 16, w = bitangent sign)
-  lightBuffer: GPUBuffer;  // lightmap (vec2f, stride  8, xy = skyLight/blockLight 0-1)
+  posBuffer: GPUBuffer;
+  uvlBuffer: GPUBuffer;
+  norBuffer: GPUBuffer; // normals  (vec3f, stride 12)
+  tanBuffer: GPUBuffer; // tangents (vec4f, stride 16, w = bitangent sign)
+  lightBuffer: GPUBuffer; // lightmap (vec2f, stride  8, xy = skyLight/blockLight 0-1)
   modelBuffer: GPUBuffer;
-  bindGroup:   GPUBindGroup; // group 1 for GBuffer terrain pipeline
+  bindGroup: GPUBindGroup; // group 1 for GBuffer terrain pipeline
   vertexCount: number;
 }
 
 /** Visible-chunk data passed into each GBuffer draw call. */
 interface ChunkRenderData {
-  posBuffer:   GPUBuffer;
-  uvlBuffer:   GPUBuffer;
-  norBuffer:   GPUBuffer;
-  tanBuffer:   GPUBuffer;
+  posBuffer: GPUBuffer;
+  uvlBuffer: GPUBuffer;
+  norBuffer: GPUBuffer;
+  tanBuffer: GPUBuffer;
   lightBuffer: GPUBuffer;
   modelBuffer: GPUBuffer;
   vertexCount: number;
@@ -99,29 +172,30 @@ interface ChunkRenderData {
 //   [72..75]  ambientColor    (xyz = RGB, w = scale)
 //   [76..79]  fogColorNear    (xyz = fog RGB, w = fogNear)
 //   [80..83]  fogFar          (x = fogFar, yzw = 0)
-const GFRAME_UBO_SIZE   = 336; // 84 × 4
+const GFRAME_UBO_SIZE = 336; // 84 × 4
 const GFRAME_UBO_FLOATS = 84;
 
 // ── OutlineUBO layout (80 bytes) ───────────────────────────────────────────
 // struct OutlineUniforms { model: mat4x4f, alpha: f32, _pad: vec3f }
-const OUTLINE_UBO_SIZE   = 80;
+const OUTLINE_UBO_SIZE = 80;
 const OUTLINE_UBO_FLOATS = 20;
 
 // ── TonemapUBO layout (16 bytes) ───────────────────────────────────────────
 // struct TonemapUniforms { exposure: f32, _p0/1/2: f32 }
-const TONEMAP_UBO_SIZE   = 16;
+const TONEMAP_UBO_SIZE = 16;
 const TONEMAP_UBO_FLOATS = 4;
 
 // ── CloudUBO layout (16 bytes) ────────────────────────────────────────────
 // struct CloudUniforms { offsetX: f32, offsetZ: f32, alpha: f32, uvScale: f32 }
-const CLOUD_UBO_SIZE   = 16;
+const CLOUD_UBO_SIZE = 16;
 const CLOUD_UBO_FLOATS = 4;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class WebGPURenderer implements IRenderer {
   private readonly canvas: HTMLCanvasElement;
-  private captureSessionFn: (() => GameSaveV1) | null = null;
+  private captureSessionFn: (() => GameSaveV1) | null =
+    null;
   private destroySessionFn: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -130,7 +204,9 @@ export class WebGPURenderer implements IRenderer {
 
   async startSession(
     initialSave: GameSaveV1,
-    hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+    hooks: {
+      onQuitRequested: (intent: QuitToTitleIntent) => void;
+    },
   ): Promise<void> {
     const canvas = this.canvas;
 
@@ -138,7 +214,8 @@ export class WebGPURenderer implements IRenderer {
     const adapter = await navigator.gpu.requestAdapter({
       powerPreference: "high-performance",
     });
-    if (!adapter) throw new Error("No WebGPU adapter available");
+    if (!adapter)
+      throw new Error("No WebGPU adapter available");
     const device = await adapter.requestDevice({
       label: "roughly-a-3d-game",
     });
@@ -151,38 +228,94 @@ export class WebGPURenderer implements IRenderer {
     });
 
     // ── 2. Canvas context ────────────────────────────────────────────────
-    const context           = canvas.getContext("webgpu") as GPUCanvasContext;
-    const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-    context.configure({ device, format: presentationFormat, alphaMode: "opaque" });
+    const context = canvas.getContext(
+      "webgpu",
+    ) as GPUCanvasContext;
+    const presentationFormat =
+      navigator.gpu.getPreferredCanvasFormat();
+    context.configure({
+      device,
+      format: presentationFormat,
+      alphaMode: "opaque",
+    });
 
     // ── 3. Shader modules ────────────────────────────────────────────────
-    const gbufModule     = device.createShaderModule({ label: "gbufTerrain", code: gbufTerrainWGSL });
-    const deferredModule = device.createShaderModule({ label: "deferred",    code: deferredWGSL    });
-    const outlineModule  = device.createShaderModule({ label: "outline",     code: outlineWGSL     });
-    const tonemapModule  = device.createShaderModule({ label: "tonemap",     code: tonemapWGSL     });
-    const cloudsModule   = device.createShaderModule({ label: "clouds",      code: cloudsWGSL      });
+    const gbufModule = device.createShaderModule({
+      label: "gbufTerrain",
+      code: gbufTerrainWGSL,
+    });
+    const deferredModule = device.createShaderModule({
+      label: "deferred",
+      code: deferredWGSL,
+    });
+    const outlineModule = device.createShaderModule({
+      label: "outline",
+      code: outlineWGSL,
+    });
+    const tonemapModule = device.createShaderModule({
+      label: "tonemap",
+      code: tonemapWGSL,
+    });
+    const cloudsModule = device.createShaderModule({
+      label: "clouds",
+      code: cloudsWGSL,
+    });
 
     // Emit compilation errors to console early.
     await Promise.all([
-      gbufModule    .getCompilationInfo().then(reportShaderErrors("gbufTerrain")),
-      deferredModule.getCompilationInfo().then(reportShaderErrors("deferred")),
-      outlineModule .getCompilationInfo().then(reportShaderErrors("outline")),
-      tonemapModule .getCompilationInfo().then(reportShaderErrors("tonemap")),
-      cloudsModule  .getCompilationInfo().then(reportShaderErrors("clouds")),
+      gbufModule
+        .getCompilationInfo()
+        .then(reportShaderErrors("gbufTerrain")),
+      deferredModule
+        .getCompilationInfo()
+        .then(reportShaderErrors("deferred")),
+      outlineModule
+        .getCompilationInfo()
+        .then(reportShaderErrors("outline")),
+      tonemapModule
+        .getCompilationInfo()
+        .then(reportShaderErrors("tonemap")),
+      cloudsModule
+        .getCompilationInfo()
+        .then(reportShaderErrors("clouds")),
     ]);
 
     // ── 4. Bind group layouts ─────────────────────────────────────────────
-    const VS = GPUShaderStage.VERTEX, FS = GPUShaderStage.FRAGMENT;
+    const VS = GPUShaderStage.VERTEX,
+      FS = GPUShaderStage.FRAGMENT;
 
     // GBuffer terrain – Group 0: GFrameUBO + 3 atlas textures + sampler
     const gbufFrameLayout = device.createBindGroupLayout({
       label: "gbufFrame",
       entries: [
-        { binding: 0, visibility: VS | FS, buffer:  { type: "uniform", minBindingSize: GFRAME_UBO_SIZE } },
-        { binding: 1, visibility: FS,      texture: { sampleType: "float" } }, // albedo
-        { binding: 2, visibility: FS,      texture: { sampleType: "float" } }, // normal (_n)
-        { binding: 3, visibility: FS,      texture: { sampleType: "float" } }, // specular (_s)
-        { binding: 4, visibility: FS,      sampler: { type: "filtering" } },
+        {
+          binding: 0,
+          visibility: VS | FS,
+          buffer: {
+            type: "uniform",
+            minBindingSize: GFRAME_UBO_SIZE,
+          },
+        },
+        {
+          binding: 1,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        }, // albedo
+        {
+          binding: 2,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        }, // normal (_n)
+        {
+          binding: 3,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        }, // specular (_s)
+        {
+          binding: 4,
+          visibility: FS,
+          sampler: { type: "filtering" },
+        },
       ],
     });
 
@@ -190,51 +323,130 @@ export class WebGPURenderer implements IRenderer {
     const gbufChunkLayout = device.createBindGroupLayout({
       label: "gbufChunk",
       entries: [
-        { binding: 0, visibility: VS, buffer: { type: "uniform", minBindingSize: 64 } },
+        {
+          binding: 0,
+          visibility: VS,
+          buffer: { type: "uniform", minBindingSize: 64 },
+        },
       ],
     });
 
     // Outline – Group 0: only the view+proj part of GFrameUBO (first 128 bytes
     //   = view mat4 + proj mat4).  outline.wgsl reads FrameUniforms (160 bytes)
     //   which sits within the larger GFrameUBO — minBindingSize covers it.
-    const outlineFrameLayout = device.createBindGroupLayout({
-      label: "outlineFrame",
-      entries: [
-        { binding: 0, visibility: VS, buffer: { type: "uniform", minBindingSize: 160 } },
-      ],
-    });
+    const outlineFrameLayout = device.createBindGroupLayout(
+      {
+        label: "outlineFrame",
+        entries: [
+          {
+            binding: 0,
+            visibility: VS,
+            buffer: {
+              type: "uniform",
+              minBindingSize: 160,
+            },
+          },
+        ],
+      },
+    );
 
     // Outline – Group 1: model matrix + alpha
-    const outlineChunkLayout = device.createBindGroupLayout({
-      label: "outlineChunk",
-      entries: [
-        { binding: 0, visibility: VS | FS, buffer: { type: "uniform", minBindingSize: OUTLINE_UBO_SIZE } },
-      ],
-    });
+    const outlineChunkLayout = device.createBindGroupLayout(
+      {
+        label: "outlineChunk",
+        entries: [
+          {
+            binding: 0,
+            visibility: VS | FS,
+            buffer: {
+              type: "uniform",
+              minBindingSize: OUTLINE_UBO_SIZE,
+            },
+          },
+        ],
+      },
+    );
 
     // Deferred lighting – Group 0: GFrameUBO + 3 GBuffer textures + depth + lightmap
     // Uses textureLoad (integer coords) so no sampler is needed.
     const deferredLayout = device.createBindGroupLayout({
       label: "deferred",
       entries: [
-        { binding: 0, visibility: FS, buffer:  { type: "uniform", minBindingSize: GFRAME_UBO_SIZE } },
-        { binding: 1, visibility: FS, texture: { sampleType: "float" } },            // gbuf0 rgba8unorm
-        { binding: 2, visibility: FS, texture: { sampleType: "unfilterable-float" } }, // gbuf1 rgba16float (no float32-filterable feature required)
-        { binding: 3, visibility: FS, texture: { sampleType: "float" } },            // gbuf2 rgba8unorm
-        { binding: 4, visibility: FS, texture: { sampleType: "depth" } },             // gbufDepth
-        { binding: 5, visibility: FS, texture: { sampleType: "float" } },             // skybox
-        { binding: 6, visibility: FS, sampler: { type: "filtering" } },               // skybox sampler
-        { binding: 7, visibility: FS, texture: { sampleType: "float" } },             // gbuf3 lightmap rgba8unorm
+        {
+          binding: 0,
+          visibility: FS,
+          buffer: {
+            type: "uniform",
+            minBindingSize: GFRAME_UBO_SIZE,
+          },
+        },
+        {
+          binding: 1,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        }, // gbuf0 rgba8unorm
+        {
+          binding: 2,
+          visibility: FS,
+          texture: { sampleType: "unfilterable-float" },
+        }, // gbuf1 rgba16float (no float32-filterable feature required)
+        {
+          binding: 3,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        }, // gbuf2 rgba8unorm
+        {
+          binding: 4,
+          visibility: FS,
+          texture: { sampleType: "depth" },
+        }, // gbufDepth
+        {
+          binding: 5,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        }, // skybox
+        {
+          binding: 6,
+          visibility: FS,
+          sampler: { type: "filtering" },
+        }, // skybox sampler
+        {
+          binding: 7,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        }, // gbuf3 lightmap rgba8unorm
       ],
     });
 
     const cloudsLayout = device.createBindGroupLayout({
       label: "clouds",
       entries: [
-        { binding: 0, visibility: VS | FS, buffer:  { type: "uniform", minBindingSize: GFRAME_UBO_SIZE } },
-        { binding: 1, visibility: FS,      texture: { sampleType: "float" } },
-        { binding: 2, visibility: FS,      sampler: { type: "filtering" } },
-        { binding: 3, visibility: VS | FS, buffer:  { type: "uniform", minBindingSize: CLOUD_UBO_SIZE } },
+        {
+          binding: 0,
+          visibility: VS | FS,
+          buffer: {
+            type: "uniform",
+            minBindingSize: GFRAME_UBO_SIZE,
+          },
+        },
+        {
+          binding: 1,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        },
+        {
+          binding: 2,
+          visibility: FS,
+          sampler: { type: "filtering" },
+        },
+        {
+          binding: 3,
+          visibility: VS | FS,
+          buffer: {
+            type: "uniform",
+            minBindingSize: CLOUD_UBO_SIZE,
+          },
+        },
       ],
     });
 
@@ -242,112 +454,279 @@ export class WebGPURenderer implements IRenderer {
     const tonemapLayout = device.createBindGroupLayout({
       label: "tonemap",
       entries: [
-        { binding: 0, visibility: FS, texture: { sampleType: "float" } },
-        { binding: 1, visibility: FS, sampler: { type: "filtering" } },
-        { binding: 2, visibility: FS, buffer:  { type: "uniform", minBindingSize: TONEMAP_UBO_SIZE } },
+        {
+          binding: 0,
+          visibility: FS,
+          texture: { sampleType: "float" },
+        },
+        {
+          binding: 1,
+          visibility: FS,
+          sampler: { type: "filtering" },
+        },
+        {
+          binding: 2,
+          visibility: FS,
+          buffer: {
+            type: "uniform",
+            minBindingSize: TONEMAP_UBO_SIZE,
+          },
+        },
       ],
     });
 
     // ── 5. Pipeline factories ─────────────────────────────────────────────
-    const gbufPipelineLayout    = device.createPipelineLayout({ bindGroupLayouts: [gbufFrameLayout,   gbufChunkLayout]   });
-    const outlinePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [outlineFrameLayout, outlineChunkLayout] });
-    const deferredPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [deferredLayout] });
-    const cloudsPipelineLayout   = device.createPipelineLayout({ bindGroupLayouts: [cloudsLayout] });
-    const tonemapPipelineLayout  = device.createPipelineLayout({ bindGroupLayouts: [tonemapLayout]  });
+    const gbufPipelineLayout = device.createPipelineLayout({
+      bindGroupLayouts: [gbufFrameLayout, gbufChunkLayout],
+    });
+    const outlinePipelineLayout =
+      device.createPipelineLayout({
+        bindGroupLayouts: [
+          outlineFrameLayout,
+          outlineChunkLayout,
+        ],
+      });
+    const deferredPipelineLayout =
+      device.createPipelineLayout({
+        bindGroupLayouts: [deferredLayout],
+      });
+    const cloudsPipelineLayout =
+      device.createPipelineLayout({
+        bindGroupLayouts: [cloudsLayout],
+      });
+    const tonemapPipelineLayout =
+      device.createPipelineLayout({
+        bindGroupLayouts: [tonemapLayout],
+      });
 
     // GBuffer terrain pipeline: 5 vertex buffer slots, 4 MRT outputs + depth.
     const gbufPipeline = device.createRenderPipeline({
       label: "gbufTerrain",
       layout: gbufPipelineLayout,
       vertex: {
-        module: gbufModule, entryPoint: "vs_main",
+        module: gbufModule,
+        entryPoint: "vs_main",
         buffers: [
-          { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }, // pos
-          { arrayStride: 16, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x4" }] }, // uvl
-          { arrayStride: 12, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x3" }] }, // normal
-          { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "float32x4" }] }, // tangent
-          { arrayStride:  8, attributes: [{ shaderLocation: 4, offset: 0, format: "float32x2" }] }, // lightmap
+          {
+            arrayStride: 12,
+            attributes: [
+              {
+                shaderLocation: 0,
+                offset: 0,
+                format: "float32x3",
+              },
+            ],
+          }, // pos
+          {
+            arrayStride: 16,
+            attributes: [
+              {
+                shaderLocation: 1,
+                offset: 0,
+                format: "float32x4",
+              },
+            ],
+          }, // uvl
+          {
+            arrayStride: 12,
+            attributes: [
+              {
+                shaderLocation: 2,
+                offset: 0,
+                format: "float32x3",
+              },
+            ],
+          }, // normal
+          {
+            arrayStride: 16,
+            attributes: [
+              {
+                shaderLocation: 3,
+                offset: 0,
+                format: "float32x4",
+              },
+            ],
+          }, // tangent
+          {
+            arrayStride: 8,
+            attributes: [
+              {
+                shaderLocation: 4,
+                offset: 0,
+                format: "float32x2",
+              },
+            ],
+          }, // lightmap
         ],
       },
       fragment: {
-        module: gbufModule, entryPoint: "fs_main",
+        module: gbufModule,
+        entryPoint: "fs_main",
         targets: [
-          { format: "rgba8unorm"  },  // colortex0: albedo + roughness
-          { format: "rgba16float" },  // colortex1: view-space normal + F0
-          { format: "rgba8unorm"  },  // colortex2: emissive + AO
-          { format: "rgba8unorm"  },  // colortex3: lightmap (sky r, block g)
+          { format: "rgba8unorm" }, // colortex0: albedo + roughness
+          { format: "rgba16float" }, // colortex1: view-space normal + F0
+          { format: "rgba8unorm" }, // colortex2: emissive + AO
+          { format: "rgba8unorm" }, // colortex3: lightmap (sky r, block g)
         ],
       },
-      primitive:    { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-      depthStencil: { format: "depth24plus", depthCompare: "less-equal", depthWriteEnabled: true },
+      primitive: {
+        topology: "triangle-list",
+        cullMode: "back",
+        frontFace: "ccw",
+      },
+      depthStencil: {
+        format: "depth24plus",
+        depthCompare: "less-equal",
+        depthWriteEnabled: true,
+      },
     });
 
     // Deferred lighting pipeline: fullscreen triangle, no vertex buffers.
-    const buildDeferredPipeline = (colorFmt: GPUTextureFormat): GPURenderPipeline =>
+    const buildDeferredPipeline = (
+      colorFmt: GPUTextureFormat,
+    ): GPURenderPipeline =>
       device.createRenderPipeline({
         label: "deferred",
         layout: deferredPipelineLayout,
-        vertex:   { module: deferredModule, entryPoint: "vs_main" },
-        fragment: { module: deferredModule, entryPoint: "fs_main",
-                    targets: [{ format: colorFmt }] },
+        vertex: {
+          module: deferredModule,
+          entryPoint: "vs_main",
+        },
+        fragment: {
+          module: deferredModule,
+          entryPoint: "fs_main",
+          targets: [{ format: colorFmt }],
+        },
         primitive: { topology: "triangle-list" },
       });
 
-    const buildOutlinePipeline = (colorFmt: GPUTextureFormat): GPURenderPipeline =>
+    const buildOutlinePipeline = (
+      colorFmt: GPUTextureFormat,
+    ): GPURenderPipeline =>
       device.createRenderPipeline({
         label: "outline",
         layout: outlinePipelineLayout,
         vertex: {
-          module: outlineModule, entryPoint: "vs_main",
+          module: outlineModule,
+          entryPoint: "vs_main",
           buffers: [
-            { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
+            {
+              arrayStride: 12,
+              attributes: [
+                {
+                  shaderLocation: 0,
+                  offset: 0,
+                  format: "float32x3",
+                },
+              ],
+            },
           ],
         },
         fragment: {
-          module: outlineModule, entryPoint: "fs_main",
-          targets: [{
-            format: colorFmt,
-            blend: {
-              color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
-              alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
+          module: outlineModule,
+          entryPoint: "fs_main",
+          targets: [
+            {
+              format: colorFmt,
+              blend: {
+                color: {
+                  srcFactor: "src-alpha",
+                  dstFactor: "one-minus-src-alpha",
+                  operation: "add",
+                },
+                alpha: {
+                  srcFactor: "one",
+                  dstFactor: "one-minus-src-alpha",
+                  operation: "add",
+                },
+              },
             },
-          }],
+          ],
         },
-        primitive:    { topology: "line-list" },
-        depthStencil: { format: "depth24plus", depthCompare: "less-equal", depthWriteEnabled: false },
+        primitive: { topology: "line-list" },
+        depthStencil: {
+          format: "depth24plus",
+          depthCompare: "less-equal",
+          depthWriteEnabled: false,
+        },
       });
 
-    const buildCloudPipeline = (colorFmt: GPUTextureFormat): GPURenderPipeline =>
+    const buildCloudPipeline = (
+      colorFmt: GPUTextureFormat,
+    ): GPURenderPipeline =>
       device.createRenderPipeline({
         label: "clouds",
         layout: cloudsPipelineLayout,
         vertex: {
-          module: cloudsModule, entryPoint: "vs_main",
+          module: cloudsModule,
+          entryPoint: "vs_main",
           buffers: [
-            { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
-            { arrayStride: 8,  attributes: [{ shaderLocation: 1, offset: 0, format: "float32x2" }] },
+            {
+              arrayStride: 12,
+              attributes: [
+                {
+                  shaderLocation: 0,
+                  offset: 0,
+                  format: "float32x3",
+                },
+              ],
+            },
+            {
+              arrayStride: 8,
+              attributes: [
+                {
+                  shaderLocation: 1,
+                  offset: 0,
+                  format: "float32x2",
+                },
+              ],
+            },
           ],
         },
         fragment: {
-          module: cloudsModule, entryPoint: "fs_main",
-          targets: [{
-            format: colorFmt,
-            blend: {
-              color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
-              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+          module: cloudsModule,
+          entryPoint: "fs_main",
+          targets: [
+            {
+              format: colorFmt,
+              blend: {
+                color: {
+                  srcFactor: "src-alpha",
+                  dstFactor: "one-minus-src-alpha",
+                  operation: "add",
+                },
+                alpha: {
+                  srcFactor: "one",
+                  dstFactor: "one-minus-src-alpha",
+                  operation: "add",
+                },
+              },
             },
-          }],
+          ],
         },
-        primitive: { topology: "triangle-list", cullMode: "none" },
-        depthStencil: { format: "depth24plus", depthCompare: "less-equal", depthWriteEnabled: false },
+        primitive: {
+          topology: "triangle-list",
+          cullMode: "none",
+        },
+        depthStencil: {
+          format: "depth24plus",
+          depthCompare: "less-equal",
+          depthWriteEnabled: false,
+        },
       });
 
     const tonemapPipeline = device.createRenderPipeline({
       label: "tonemap",
       layout: tonemapPipelineLayout,
-      vertex:   { module: tonemapModule, entryPoint: "vs_main" },
-      fragment: { module: tonemapModule, entryPoint: "fs_main",
-                  targets: [{ format: presentationFormat }] },
+      vertex: {
+        module: tonemapModule,
+        entryPoint: "vs_main",
+      },
+      fragment: {
+        module: tonemapModule,
+        entryPoint: "fs_main",
+        targets: [{ format: presentationFormat }],
+      },
       primitive: { topology: "triangle-list" },
     });
 
@@ -362,7 +741,9 @@ export class WebGPURenderer implements IRenderer {
     }
 
     const atlasBundle = resourcePacks.getAtlasManifest()
-      ? await buildAllAtlasesFromManifest(resourcePacks.getAtlasManifest())
+      ? await buildAllAtlasesFromManifest(
+          resourcePacks.getAtlasManifest(),
+        )
       : await buildAllAtlases();
 
     const {
@@ -372,7 +753,12 @@ export class WebGPURenderer implements IRenderer {
       stats: atlasStats,
     } = atlasBundle;
 
-    if (atlasStats.albedoFallbacks + atlasStats.normalFallbacks + atlasStats.specularFallbacks > 0) {
+    if (
+      atlasStats.albedoFallbacks +
+        atlasStats.normalFallbacks +
+        atlasStats.specularFallbacks >
+      0
+    ) {
       console.info(
         "[PBR Atlas] fallback tiles",
         `albedo=${atlasStats.albedoFallbacks}`,
@@ -381,12 +767,21 @@ export class WebGPURenderer implements IRenderer {
       );
     }
 
-    const uploadAtlas = (canvas: HTMLCanvasElement, label: string): GPUTexture => {
+    const uploadAtlas = (
+      canvas: HTMLCanvasElement,
+      label: string,
+    ): GPUTexture => {
       const tex = device.createTexture({
         label,
-        size: { width: canvas.width, height: canvas.height },
+        size: {
+          width: canvas.width,
+          height: canvas.height,
+        },
         format: "rgba8unorm",
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING |
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.RENDER_ATTACHMENT,
       });
       device.queue.copyExternalImageToTexture(
         { source: canvas, flipY: true },
@@ -396,110 +791,193 @@ export class WebGPURenderer implements IRenderer {
       return tex;
     };
 
-    const albedoAtlasTex   = uploadAtlas(albedoCanvas,   "albedoAtlas");
-    const normalAtlasTex   = uploadAtlas(normalCanvas,   "normalAtlas");
-    const specularAtlasTex = uploadAtlas(specularCanvas, "specularAtlas");
-    const cloudCanvas      = await loadCloudTextureCanvas(resourcePacks.getCloudTextureUrl());
-    const cloudTex         = uploadAtlas(cloudCanvas, "cloudTex");
-    const skyboxCanvas     = await loadSkyboxTextureCanvas(resourcePacks.getSkyboxTextureUrl());
-    const skyboxTex        = uploadAtlas(skyboxCanvas, "skyboxTex");
+    const albedoAtlasTex = uploadAtlas(
+      albedoCanvas,
+      "albedoAtlas",
+    );
+    const normalAtlasTex = uploadAtlas(
+      normalCanvas,
+      "normalAtlas",
+    );
+    const specularAtlasTex = uploadAtlas(
+      specularCanvas,
+      "specularAtlas",
+    );
+    const cloudCanvas = await loadCloudTextureCanvas(
+      resourcePacks.getCloudTextureUrl(),
+    );
+    const cloudTex = uploadAtlas(cloudCanvas, "cloudTex");
+    const skyboxCanvas = await loadSkyboxTextureCanvas(
+      resourcePacks.getSkyboxTextureUrl(),
+    );
+    const skyboxTex = uploadAtlas(
+      skyboxCanvas,
+      "skyboxTex",
+    );
 
     // Nearest sampler for atlas reads (GBuffer pass), linear sampler for tonemap.
     const atlasSampler = device.createSampler({
       label: "atlasNearest",
-      magFilter: "nearest", minFilter: "nearest",
-      addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge",
+      magFilter: "nearest",
+      minFilter: "nearest",
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
     });
     const linearSampler = device.createSampler({
       label: "hdrLinear",
-      magFilter: "linear", minFilter: "linear",
-      addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge",
+      magFilter: "linear",
+      minFilter: "linear",
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
     });
     const cloudSampler = device.createSampler({
       label: "cloudLinear",
-      magFilter: "linear", minFilter: "linear",
-      addressModeU: "repeat", addressModeV: "repeat",
+      magFilter: "linear",
+      minFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "repeat",
     });
     const skyboxSampler = device.createSampler({
       label: "skyboxLinear",
-      magFilter: "linear", minFilter: "linear",
-      addressModeU: "repeat", addressModeV: "clamp-to-edge",
+      magFilter: "linear",
+      minFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "clamp-to-edge",
     });
 
     // ── 7. Persistent GPU buffers ─────────────────────────────────────────
-    const gframeUBO      = device.createBuffer({ label: "gframeUBO",  size: GFRAME_UBO_SIZE,   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const gframeUBOData  = new Float32Array(GFRAME_UBO_FLOATS);
+    const gframeUBO = device.createBuffer({
+      label: "gframeUBO",
+      size: GFRAME_UBO_SIZE,
+      usage:
+        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const gframeUBOData = new Float32Array(
+      GFRAME_UBO_FLOATS,
+    );
 
-    const outlineUBO     = device.createBuffer({ label: "outlineUBO", size: OUTLINE_UBO_SIZE,  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const outlineUBOData = new Float32Array(OUTLINE_UBO_FLOATS);
+    const outlineUBO = device.createBuffer({
+      label: "outlineUBO",
+      size: OUTLINE_UBO_SIZE,
+      usage:
+        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const outlineUBOData = new Float32Array(
+      OUTLINE_UBO_FLOATS,
+    );
 
-    const tonemapUBO     = device.createBuffer({ label: "tonemapUBO", size: TONEMAP_UBO_SIZE,  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const tonemapUBOData = new Float32Array(TONEMAP_UBO_FLOATS);
-    const cloudUBO       = device.createBuffer({ label: "cloudUBO", size: CLOUD_UBO_SIZE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const cloudUBOData   = new Float32Array(CLOUD_UBO_FLOATS);
+    const tonemapUBO = device.createBuffer({
+      label: "tonemapUBO",
+      size: TONEMAP_UBO_SIZE,
+      usage:
+        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const tonemapUBOData = new Float32Array(
+      TONEMAP_UBO_FLOATS,
+    );
+    const cloudUBO = device.createBuffer({
+      label: "cloudUBO",
+      size: CLOUD_UBO_SIZE,
+      usage:
+        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const cloudUBOData = new Float32Array(CLOUD_UBO_FLOATS);
 
     // Wire-cube static vertex buffer
     const wireCubeBuf = device.createBuffer({
       label: "wireCube",
       size: WIRE_CUBE.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage:
+        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(wireCubeBuf.getMappedRange()).set(WIRE_CUBE);
+    new Float32Array(wireCubeBuf.getMappedRange()).set(
+      WIRE_CUBE,
+    );
     wireCubeBuf.unmap();
 
-    const cloudMeshFancy = buildCloudMesh({ radiusTiles: 26, tileSize: 8, y: 34, seed: 1337, density: 0.62 });
-    const cloudMeshFast  = buildCloudMesh({ radiusTiles: 14, tileSize: 12, y: 34, seed: 1337, density: 0.5 });
+    const cloudMeshFancy = buildCloudMesh({
+      radiusTiles: 26,
+      tileSize: 8,
+      y: 34,
+      seed: 1337,
+      density: 0.62,
+    });
+    const cloudMeshFast = buildCloudMesh({
+      radiusTiles: 14,
+      tileSize: 12,
+      y: 34,
+      seed: 1337,
+      density: 0.5,
+    });
     const cloudPosFancy = device.createBuffer({
       label: "cloudPosFancy",
       size: cloudMeshFancy.positions.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage:
+        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(cloudPosFancy.getMappedRange()).set(cloudMeshFancy.positions);
+    new Float32Array(cloudPosFancy.getMappedRange()).set(
+      cloudMeshFancy.positions,
+    );
     cloudPosFancy.unmap();
 
     const cloudUvFancy = device.createBuffer({
       label: "cloudUvFancy",
       size: cloudMeshFancy.uvs.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage:
+        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(cloudUvFancy.getMappedRange()).set(cloudMeshFancy.uvs);
+    new Float32Array(cloudUvFancy.getMappedRange()).set(
+      cloudMeshFancy.uvs,
+    );
     cloudUvFancy.unmap();
 
     const cloudPosFast = device.createBuffer({
       label: "cloudPosFast",
       size: cloudMeshFast.positions.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage:
+        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(cloudPosFast.getMappedRange()).set(cloudMeshFast.positions);
+    new Float32Array(cloudPosFast.getMappedRange()).set(
+      cloudMeshFast.positions,
+    );
     cloudPosFast.unmap();
 
     const cloudUvFast = device.createBuffer({
       label: "cloudUvFast",
       size: cloudMeshFast.uvs.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage:
+        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(cloudUvFast.getMappedRange()).set(cloudMeshFast.uvs);
+    new Float32Array(cloudUvFast.getMappedRange()).set(
+      cloudMeshFast.uvs,
+    );
     cloudUvFast.unmap();
 
     // ── 8. Mutable pipeline / texture state ──────────────────────────────
-    let hdrActive  = false;
-    let hdrTex:    GPUTexture | null = null;
+    let hdrActive = false;
+    let hdrTex: GPUTexture | null = null;
 
     // GBuffer textures (screen-resolution, rebuilt on resize).
-    let gbuf0Tex:     GPUTexture | null = null;  // rgba8unorm  albedo+roughness
-    let gbuf1Tex:     GPUTexture | null = null;  // rgba16float normal+F0
-    let gbuf2Tex:     GPUTexture | null = null;  // rgba8unorm  emissive+AO
-    let gbuf3Tex:     GPUTexture | null = null;  // rgba8unorm  lightmap (sky r, block g)
-    let gbufDepthTex: GPUTexture | null = null;  // depth24plus (sampleable)
+    let gbuf0Tex: GPUTexture | null = null; // rgba8unorm  albedo+roughness
+    let gbuf1Tex: GPUTexture | null = null; // rgba16float normal+F0
+    let gbuf2Tex: GPUTexture | null = null; // rgba8unorm  emissive+AO
+    let gbuf3Tex: GPUTexture | null = null; // rgba8unorm  lightmap (sky r, block g)
+    let gbufDepthTex: GPUTexture | null = null; // depth24plus (sampleable)
 
-    let deferredPipeline = buildDeferredPipeline(presentationFormat);
-    let outlinePipeline  = buildOutlinePipeline(presentationFormat);
-    let cloudsPipeline   = buildCloudPipeline(presentationFormat);
+    let deferredPipeline = buildDeferredPipeline(
+      presentationFormat,
+    );
+    let outlinePipeline = buildOutlinePipeline(
+      presentationFormat,
+    );
+    let cloudsPipeline = buildCloudPipeline(
+      presentationFormat,
+    );
 
     // GBuffer frame bind group (3 atlas textures; rebuilt once here, stable).
     const gbufFrameBindGroup = device.createBindGroup({
@@ -507,9 +985,18 @@ export class WebGPURenderer implements IRenderer {
       layout: gbufFrameLayout,
       entries: [
         { binding: 0, resource: { buffer: gframeUBO } },
-        { binding: 1, resource: albedoAtlasTex.createView() },
-        { binding: 2, resource: normalAtlasTex.createView() },
-        { binding: 3, resource: specularAtlasTex.createView() },
+        {
+          binding: 1,
+          resource: albedoAtlasTex.createView(),
+        },
+        {
+          binding: 2,
+          resource: normalAtlasTex.createView(),
+        },
+        {
+          binding: 3,
+          resource: specularAtlasTex.createView(),
+        },
         { binding: 4, resource: atlasSampler },
       ],
     });
@@ -518,12 +1005,16 @@ export class WebGPURenderer implements IRenderer {
     const outlineFrameBindGroup = device.createBindGroup({
       label: "outlineFrame",
       layout: outlineFrameLayout,
-      entries: [{ binding: 0, resource: { buffer: gframeUBO } }],
+      entries: [
+        { binding: 0, resource: { buffer: gframeUBO } },
+      ],
     });
     const outlineChunkBindGroup = device.createBindGroup({
       label: "outlineChunk",
       layout: outlineChunkLayout,
-      entries: [{ binding: 0, resource: { buffer: outlineUBO } }],
+      entries: [
+        { binding: 0, resource: { buffer: outlineUBO } },
+      ],
     });
 
     let deferredBindGroup: GPUBindGroup | null = null;
@@ -537,7 +1028,7 @@ export class WebGPURenderer implements IRenderer {
         { binding: 3, resource: { buffer: cloudUBO } },
       ],
     });
-    let tonemapBindGroup:  GPUBindGroup | null = null;
+    let tonemapBindGroup: GPUBindGroup | null = null;
     const shaderRegistry = new ShaderProgramRegistry();
     // All stages use the built-in pipeline (no runtime GLSL→WGSL compilation).
     for (const stage of STAGE_NAMES) {
@@ -555,16 +1046,23 @@ export class WebGPURenderer implements IRenderer {
       gbuf3Tex?.destroy();
       gbufDepthTex?.destroy();
 
-      const mkTex = (fmt: GPUTextureFormat, label: string) =>
+      const mkTex = (
+        fmt: GPUTextureFormat,
+        label: string,
+      ) =>
         device.createTexture({
-          label, size: { width: w, height: h }, format: fmt,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+          label,
+          size: { width: w, height: h },
+          format: fmt,
+          usage:
+            GPUTextureUsage.RENDER_ATTACHMENT |
+            GPUTextureUsage.TEXTURE_BINDING,
         });
 
-      gbuf0Tex     = mkTex("rgba8unorm",  "gbuf0");
-      gbuf1Tex     = mkTex("rgba16float", "gbuf1");
-      gbuf2Tex     = mkTex("rgba8unorm",  "gbuf2");
-      gbuf3Tex     = mkTex("rgba8unorm",  "gbuf3");
+      gbuf0Tex = mkTex("rgba8unorm", "gbuf0");
+      gbuf1Tex = mkTex("rgba16float", "gbuf1");
+      gbuf2Tex = mkTex("rgba8unorm", "gbuf2");
+      gbuf3Tex = mkTex("rgba8unorm", "gbuf3");
       gbufDepthTex = mkTex("depth24plus", "gbufDepth");
 
       deferredBindGroup = device.createBindGroup({
@@ -575,7 +1073,10 @@ export class WebGPURenderer implements IRenderer {
           { binding: 1, resource: gbuf0Tex.createView() },
           { binding: 2, resource: gbuf1Tex.createView() },
           { binding: 3, resource: gbuf2Tex.createView() },
-          { binding: 4, resource: gbufDepthTex.createView() },
+          {
+            binding: 4,
+            resource: gbufDepthTex.createView(),
+          },
           { binding: 5, resource: skyboxTex.createView() },
           { binding: 6, resource: skyboxSampler },
           { binding: 7, resource: gbuf3Tex.createView() },
@@ -586,9 +1087,12 @@ export class WebGPURenderer implements IRenderer {
     function buildHDR(w: number, h: number): void {
       hdrTex?.destroy();
       hdrTex = device.createTexture({
-        label: "hdrColor", size: { width: w, height: h },
+        label: "hdrColor",
+        size: { width: w, height: h },
         format: "rgba16float",
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        usage:
+          GPUTextureUsage.RENDER_ATTACHMENT |
+          GPUTextureUsage.TEXTURE_BINDING,
       });
       tonemapBindGroup = device.createBindGroup({
         label: "tonemap",
@@ -599,18 +1103,26 @@ export class WebGPURenderer implements IRenderer {
           { binding: 2, resource: { buffer: tonemapUBO } },
         ],
       });
-      deferredPipeline = buildDeferredPipeline("rgba16float");
-      outlinePipeline  = buildOutlinePipeline("rgba16float");
-      cloudsPipeline   = buildCloudPipeline("rgba16float");
+      deferredPipeline =
+        buildDeferredPipeline("rgba16float");
+      outlinePipeline = buildOutlinePipeline("rgba16float");
+      cloudsPipeline = buildCloudPipeline("rgba16float");
       hdrActive = true;
     }
 
     function destroyHDR(): void {
-      hdrTex?.destroy(); hdrTex = null;
+      hdrTex?.destroy();
+      hdrTex = null;
       tonemapBindGroup = null;
-      deferredPipeline = buildDeferredPipeline(presentationFormat);
-      outlinePipeline  = buildOutlinePipeline(presentationFormat);
-      cloudsPipeline   = buildCloudPipeline(presentationFormat);
+      deferredPipeline = buildDeferredPipeline(
+        presentationFormat,
+      );
+      outlinePipeline = buildOutlinePipeline(
+        presentationFormat,
+      );
+      cloudsPipeline = buildCloudPipeline(
+        presentationFormat,
+      );
       hdrActive = false;
     }
 
@@ -630,10 +1142,15 @@ export class WebGPURenderer implements IRenderer {
       const mesh = chunk.buildMesh();
       if (mesh.vertexCount === 0) return;
 
-      const mkVB = (data: Float32Array, label: string): GPUBuffer => {
+      const mkVB = (
+        data: Float32Array,
+        label: string,
+      ): GPUBuffer => {
         const buf = device.createBuffer({
-          label, size: data.byteLength,
-          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+          label,
+          size: data.byteLength,
+          usage:
+            GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
           mappedAtCreation: true,
         });
         new Float32Array(buf.getMappedRange()).set(data);
@@ -641,43 +1158,81 @@ export class WebGPURenderer implements IRenderer {
         return buf;
       };
 
-      const posBuffer   = mkVB(mesh.positions, `pos(${chunk.cx},${chunk.cz})`);
-      const uvlBuffer   = mkVB(mesh.uvls,      `uvl(${chunk.cx},${chunk.cz})`);
-      const norBuffer   = mkVB(mesh.normals,   `nor(${chunk.cx},${chunk.cz})`);
-      const tanBuffer   = mkVB(mesh.tangents,  `tan(${chunk.cx},${chunk.cz})`);
-      const lightBuffer = mkVB(mesh.lights,    `lgt(${chunk.cx},${chunk.cz})`);
+      const posBuffer = mkVB(
+        mesh.positions,
+        `pos(${chunk.cx},${chunk.cz})`,
+      );
+      const uvlBuffer = mkVB(
+        mesh.uvls,
+        `uvl(${chunk.cx},${chunk.cz})`,
+      );
+      const norBuffer = mkVB(
+        mesh.normals,
+        `nor(${chunk.cx},${chunk.cz})`,
+      );
+      const tanBuffer = mkVB(
+        mesh.tangents,
+        `tan(${chunk.cx},${chunk.cz})`,
+      );
+      const lightBuffer = mkVB(
+        mesh.lights,
+        `lgt(${chunk.cx},${chunk.cz})`,
+      );
 
       const modelMat = mat4.create();
-      mat4.translate(modelMat, modelMat, [chunk.cx * CHUNK_SIZE, 0, chunk.cz * CHUNK_SIZE]);
+      mat4.translate(modelMat, modelMat, [
+        chunk.cx * CHUNK_SIZE,
+        0,
+        chunk.cz * CHUNK_SIZE,
+      ]);
 
       const modelBuffer = device.createBuffer({
         label: `model(${chunk.cx},${chunk.cz})`,
-        size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        size: 64,
+        usage:
+          GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         mappedAtCreation: true,
       });
-      new Float32Array(modelBuffer.getMappedRange()).set(modelMat);
+      new Float32Array(modelBuffer.getMappedRange()).set(
+        modelMat,
+      );
       modelBuffer.unmap();
 
       const bindGroup = device.createBindGroup({
         label: `chunkBG(${chunk.cx},${chunk.cz})`,
         layout: gbufChunkLayout,
-        entries: [{ binding: 0, resource: { buffer: modelBuffer } }],
+        entries: [
+          { binding: 0, resource: { buffer: modelBuffer } },
+        ],
       });
 
       chunkData.set(chunk, {
-        posBuffer, uvlBuffer, norBuffer, tanBuffer, lightBuffer,
-        modelBuffer, bindGroup, vertexCount: mesh.vertexCount,
+        posBuffer,
+        uvlBuffer,
+        norBuffer,
+        tanBuffer,
+        lightBuffer,
+        modelBuffer,
+        bindGroup,
+        vertexCount: mesh.vertexCount,
       });
     }
 
-    function rebuildChunk(wx: number, _wy: number, wz: number): void {
-      const chunk = world.getChunk(Math.floor(wx / CHUNK_SIZE), Math.floor(wz / CHUNK_SIZE));
+    function rebuildChunk(
+      wx: number,
+      _wy: number,
+      wz: number,
+    ): void {
+      const chunk = world.getChunk(
+        Math.floor(wx / CHUNK_SIZE),
+        Math.floor(wz / CHUNK_SIZE),
+      );
       if (chunk) uploadChunk(chunk);
     }
 
     // ── Resize ────────────────────────────────────────────────────────────
     function resize(): void {
-      canvas.width  = window.innerWidth;
+      canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       buildGBuffers(canvas.width, canvas.height);
       if (hdrActive) buildHDR(canvas.width, canvas.height);
@@ -686,20 +1241,34 @@ export class WebGPURenderer implements IRenderer {
     resize();
 
     // ── Game objects ──────────────────────────────────────────────────────
-    const camera   = new Camera();
-    const world    = World.fromSnapshot(initialSave.world);
+    const camera = new Camera();
+    const world = World.fromSnapshot(initialSave.world);
 
-    const physics   = new Physics(camera, world);
+    const physics = new Physics(camera, world);
     const pauseMenu = new PauseMenu(
       () => input.requestLock(),
       (intent) => hooks.onQuitRequested(intent),
     );
     pauseMenu.mount(document.getElementById("pause-root")!);
-    const disposeDropOverlay = mountDropOverlay(document.getElementById("pause-root")!);
+    const disposeDropOverlay = mountDropOverlay(
+      document.getElementById("pause-root")!,
+    );
 
     const debug = new DebugOverlay(null);
-    const input = new InputManager(canvas, camera, physics, world, rebuildChunk, pauseMenu);
-    hydrateRuntime(initialSave, { world, camera, physics, input });
+    const input = new InputManager(
+      canvas,
+      camera,
+      physics,
+      world,
+      rebuildChunk,
+      pauseMenu,
+    );
+    hydrateRuntime(initialSave, {
+      world,
+      camera,
+      physics,
+      input,
+    });
 
     world.chunks.forEach((chunk) => uploadChunk(chunk));
 
@@ -709,8 +1278,8 @@ export class WebGPURenderer implements IRenderer {
     const OUTLINE_FADE = 5.0;
 
     const scratchMat = mat4.create();
-    const frustum    = new Frustum();
-    const vpMatrix   = mat4.create();
+    const frustum = new Frustum();
+    const vpMatrix = mat4.create();
     let running = true;
     let rafId = 0;
 
@@ -721,123 +1290,210 @@ export class WebGPURenderer implements IRenderer {
       Time.CalculateTimeVariables();
       input.update();
 
-      const shaderpackSnapshot = getShaderpackStateSnapshot();
+      const shaderpackSnapshot =
+        getShaderpackStateSnapshot();
       shaderRegistry.sync(shaderpackSnapshot.stageStatuses);
-      const cloudsMode = shaderpackSnapshot.manifest?.properties.clouds ?? "fancy";
+      const cloudsMode =
+        shaderpackSnapshot.manifest?.properties.clouds ??
+        "fancy";
 
       const wantHdr = Settings.hdr && Settings.hdrSupported;
-      if (wantHdr && !hdrActive)       buildHDR(canvas.width, canvas.height);
-      else if (!wantHdr && hdrActive)  destroyHDR();
+      if (wantHdr && !hdrActive)
+        buildHDR(canvas.width, canvas.height);
+      else if (!wantHdr && hdrActive) destroyHDR();
 
       // ── Day-night cycle ───────────────────────────────────────────────
-      const wt        = Time.worldTime;
-      const sunAngle  = (wt - 0.25) * Math.PI * 2;
+      const wt = Time.worldTime;
+      const sunAngle = (wt - 0.25) * Math.PI * 2;
       const sunHeight = Math.sin(sunAngle);
       const dayFactor = Math.max(0.0, sunHeight);
-      const twilight  = sunHeight > -0.3 ? Math.exp(-sunHeight * sunHeight * 30.0) : 0.0;
-      const lerp      = (a: number, b: number, t: number) => a + (b - a) * t;
+      const twilight =
+        sunHeight > -0.3
+          ? Math.exp(-sunHeight * sunHeight * 30.0)
+          : 0.0;
+      const lerp = (a: number, b: number, t: number) =>
+        a + (b - a) * t;
 
-      const skyR = lerp(lerp(0.01, 0.88, twilight), 0.53, dayFactor);
-      const skyG = lerp(lerp(0.01, 0.45, twilight), 0.81, dayFactor);
-      const skyB = lerp(lerp(0.1,  0.22, twilight), 0.92, dayFactor);
+      const skyR = lerp(
+        lerp(0.01, 0.88, twilight),
+        0.53,
+        dayFactor,
+      );
+      const skyG = lerp(
+        lerp(0.01, 0.45, twilight),
+        0.81,
+        dayFactor,
+      );
+      const skyB = lerp(
+        lerp(0.1, 0.22, twilight),
+        0.92,
+        dayFactor,
+      );
 
       const hdrScale = wantHdr ? 1.6 : 1.0;
-      const brt      = wantHdr ? 1.0 : Settings.brightness;
-      const ambR = lerp(lerp(0.03, 0.75, twilight), 1.0,  dayFactor) * hdrScale * brt;
-      const ambG = lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor) * hdrScale * brt;
-      const ambB = lerp(lerp(0.1,  0.22, twilight), 0.8,  dayFactor) * hdrScale * brt;
+      const brt = wantHdr ? 1.0 : Settings.brightness;
+      const ambR =
+        lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor) *
+        hdrScale *
+        brt;
+      const ambG =
+        lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor) *
+        hdrScale *
+        brt;
+      const ambB =
+        lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor) *
+        hdrScale *
+        brt;
 
       // Sun strength (brighter than ambient; zero at night).
-      const sunStr = (dayFactor * 1.5 + twilight * 0.3) * hdrScale * brt;
+      const sunStr =
+        (dayFactor * 1.5 + twilight * 0.3) * hdrScale * brt;
 
       // ── Camera matrices ───────────────────────────────────────────────
-      const aspect       = canvas.width / canvas.height;
-      const viewMatrix   = camera.getViewMatrix();
+      const aspect = canvas.width / canvas.height;
+      const viewMatrix = camera.getViewMatrix();
       // ZO projection for correct WebGPU depth range [0, 1].
-      const projMatrixZO = camera.getProjectionMatrixZO(aspect);
+      const projMatrixZO =
+        camera.getProjectionMatrixZO(aspect);
       // Standard perspective for frustum culling only (both work for culling).
-      const projMatrix   = camera.getProjectionMatrix(aspect);
+      const projMatrix = camera.getProjectionMatrix(aspect);
       mat4.multiply(vpMatrix, projMatrix, viewMatrix);
       frustum.update(vpMatrix);
 
       // Inverse matrices for the deferred lighting pass.
-      const viewInv = mat4.invert(mat4.create(), viewMatrix)!;
-      const projInv = mat4.invert(mat4.create(), projMatrixZO)!;
+      const viewInv = mat4.invert(
+        mat4.create(),
+        viewMatrix,
+      )!;
+      const projInv = mat4.invert(
+        mat4.create(),
+        projMatrixZO,
+      )!;
 
       // Sun direction: (0, sin(sunAngle), -cos(sunAngle)) → transform to view space.
       // gl-matrix column-major: M*v = result.x = M[0]*vx + M[4]*vy + M[8]*vz  (w=0 dir).
-      const vm  = viewMatrix as Float32Array;
+      const vm = viewMatrix as Float32Array;
       const sdY = Math.sin(sunAngle);
       const sdZ = -Math.cos(sunAngle);
-      const svx = vm[4] * sdY + vm[8]  * sdZ;
-      const svy = vm[5] * sdY + vm[9]  * sdZ;
+      const svx = vm[4] * sdY + vm[8] * sdZ;
+      const svy = vm[5] * sdY + vm[9] * sdZ;
       const svz = vm[6] * sdY + vm[10] * sdZ;
-      const svLen = Math.sqrt(svx*svx + svy*svy + svz*svz) || 1;
+      const svLen =
+        Math.sqrt(svx * svx + svy * svy + svz * svz) || 1;
 
       // ── GFrameUBO write ───────────────────────────────────────────────
-      gframeUBOData.set(viewMatrix,   0);   // view         [0..15]
-      gframeUBOData.set(projMatrixZO, 16);  // projection   [16..31]
-      gframeUBOData.set(viewInv,      32);  // viewInv      [32..47]
-      gframeUBOData.set(projInv,      48);  // projInv      [48..63]
-      gframeUBOData[64] = svx/svLen; gframeUBOData[65] = svy/svLen; gframeUBOData[66] = svz/svLen;
-      gframeUBOData[67] = sunStr;                                         // sunDirStrength.w
-      gframeUBOData[68] = 1.0; gframeUBOData[69] = 0.97; gframeUBOData[70] = 0.9; gframeUBOData[71] = 0; // sunColor
-      gframeUBOData[72] = ambR; gframeUBOData[73] = ambG; gframeUBOData[74] = ambB;
-      gframeUBOData[75] = 1.0;                                             // ambientColor.w (already scaled)
-      gframeUBOData[76] = skyR; gframeUBOData[77] = skyG; gframeUBOData[78] = skyB;
-      gframeUBOData[79] = 40.0;                                            // fogNear
-      gframeUBOData[80] = 80.0;                                            // fogFar.x
+      gframeUBOData.set(viewMatrix, 0); // view         [0..15]
+      gframeUBOData.set(projMatrixZO, 16); // projection   [16..31]
+      gframeUBOData.set(viewInv, 32); // viewInv      [32..47]
+      gframeUBOData.set(projInv, 48); // projInv      [48..63]
+      gframeUBOData[64] = svx / svLen;
+      gframeUBOData[65] = svy / svLen;
+      gframeUBOData[66] = svz / svLen;
+      gframeUBOData[67] = sunStr; // sunDirStrength.w
+      gframeUBOData[68] = 1.0;
+      gframeUBOData[69] = 0.97;
+      gframeUBOData[70] = 0.9;
+      gframeUBOData[71] = 0; // sunColor
+      gframeUBOData[72] = ambR;
+      gframeUBOData[73] = ambG;
+      gframeUBOData[74] = ambB;
+      gframeUBOData[75] = 1.0; // ambientColor.w (already scaled)
+      gframeUBOData[76] = skyR;
+      gframeUBOData[77] = skyG;
+      gframeUBOData[78] = skyB;
+      gframeUBOData[79] = 40.0; // fogNear
+      gframeUBOData[80] = 80.0; // fogFar.x
       // indices 81-83 unused (sky exposure now comes from per-vertex lightmap gbuf3)
       device.queue.writeBuffer(gframeUBO, 0, gframeUBOData);
 
       const cloudWind = Time.time * 0.75;
-      cloudUBOData[0] = camera.position[0] * 0.2 + cloudWind;
-      cloudUBOData[1] = camera.position[2] * 0.2 + cloudWind * 0.6;
+      cloudUBOData[0] =
+        camera.position[0] * 0.2 + cloudWind;
+      cloudUBOData[1] =
+        camera.position[2] * 0.2 + cloudWind * 0.6;
       cloudUBOData[2] = dayFactor > 0.0 ? 0.8 : 0.55;
       cloudUBOData[3] = cloudsMode === "fast" ? 2.0 : 1.0;
       device.queue.writeBuffer(cloudUBO, 0, cloudUBOData);
 
       // ── Outline UBO write ─────────────────────────────────────────────
-      const hit = raycast(camera.position, camera.getForward(), world);
-      if (hit) { lastHit = hit; outlineAlpha = 1.0; }
-      else outlineAlpha = Math.max(0.0, outlineAlpha - Time.deltaTime * OUTLINE_FADE);
+      const hit = raycast(
+        camera.position,
+        camera.getForward(),
+        world,
+      );
+      if (hit) {
+        lastHit = hit;
+        outlineAlpha = 1.0;
+      } else
+        outlineAlpha = Math.max(
+          0.0,
+          outlineAlpha - Time.deltaTime * OUTLINE_FADE,
+        );
 
-      const showOutline = outlineAlpha > 0.0 && lastHit !== null;
+      const showOutline =
+        outlineAlpha > 0.0 && lastHit !== null;
       if (showOutline && lastHit) {
         mat4.identity(scratchMat);
-        mat4.translate(scratchMat, scratchMat, [lastHit.bx, lastHit.by, lastHit.bz]);
+        mat4.translate(scratchMat, scratchMat, [
+          lastHit.bx,
+          lastHit.by,
+          lastHit.bz,
+        ]);
         outlineUBOData.set(scratchMat, 0);
         outlineUBOData[16] = outlineAlpha;
-        device.queue.writeBuffer(outlineUBO, 0, outlineUBOData);
+        device.queue.writeBuffer(
+          outlineUBO,
+          0,
+          outlineUBOData,
+        );
       }
 
       // ── Render targets ────────────────────────────────────────────────
-      const canvasTex  = context.getCurrentTexture();
+      const canvasTex = context.getCurrentTexture();
       const canvasView = canvasTex.createView();
       // Deferred + outline write to HDR tex (HDR path) or canvas (LDR path).
-      const colorView  = (wantHdr && hdrTex) ? hdrTex.createView() : canvasView;
+      const colorView =
+        wantHdr && hdrTex
+          ? hdrTex.createView()
+          : canvasView;
 
       // ── Command encoding ──────────────────────────────────────────────
-      const encoder = device.createCommandEncoder({ label: "frame" });
+      const encoder = device.createCommandEncoder({
+        label: "frame",
+      });
 
       // ── Collect visible chunks ────────────────────────────────────────
       const visibleChunkData: ChunkRenderData[] = [];
       const visibleChunkBindGroups: GPUBindGroup[] = []; // parallel to visibleChunkData
-      let drawCalls = 0, drawnVerts = 0, totalVerts = 0;
-      world.chunks.forEach((c) => { totalVerts += chunkData.get(c)?.vertexCount ?? 0; });
+      let drawCalls = 0,
+        drawnVerts = 0,
+        totalVerts = 0;
+      world.chunks.forEach((c) => {
+        totalVerts += chunkData.get(c)?.vertexCount ?? 0;
+      });
       world.chunks.forEach((chunk) => {
         const cd = chunkData.get(chunk);
         if (!cd || cd.vertexCount === 0) return;
-        const wx0 = chunk.cx * CHUNK_SIZE, wz0 = chunk.cz * CHUNK_SIZE;
-        if (!frustum.containsAABB(wx0, 0, wz0, wx0 + CHUNK_SIZE, CHUNK_SIZE, wz0 + CHUNK_SIZE))
+        const wx0 = chunk.cx * CHUNK_SIZE,
+          wz0 = chunk.cz * CHUNK_SIZE;
+        if (
+          !frustum.containsAABB(
+            wx0,
+            0,
+            wz0,
+            wx0 + CHUNK_SIZE,
+            CHUNK_SIZE,
+            wz0 + CHUNK_SIZE,
+          )
+        )
           return;
         drawCalls++;
         drawnVerts += cd.vertexCount;
         visibleChunkData.push({
-          posBuffer:   cd.posBuffer,
-          uvlBuffer:   cd.uvlBuffer,
-          norBuffer:   cd.norBuffer,
-          tanBuffer:   cd.tanBuffer,
+          posBuffer: cd.posBuffer,
+          uvlBuffer: cd.uvlBuffer,
+          norBuffer: cd.norBuffer,
+          tanBuffer: cd.tanBuffer,
           lightBuffer: cd.lightBuffer,
           modelBuffer: cd.modelBuffer,
           vertexCount: cd.vertexCount,
@@ -849,14 +1505,36 @@ export class WebGPURenderer implements IRenderer {
       const gbufPass = encoder.beginRenderPass({
         label: "gbuffer",
         colorAttachments: [
-          { view: gbuf0Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:0 } },
-          { view: gbuf1Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:0 } },
-          { view: gbuf2Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:0 } },
-          { view: gbuf3Tex!.createView(), loadOp: "clear", storeOp: "store", clearValue: { r:0,g:0,b:0,a:1 } },
+          {
+            view: gbuf0Tex!.createView(),
+            loadOp: "clear",
+            storeOp: "store",
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          },
+          {
+            view: gbuf1Tex!.createView(),
+            loadOp: "clear",
+            storeOp: "store",
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          },
+          {
+            view: gbuf2Tex!.createView(),
+            loadOp: "clear",
+            storeOp: "store",
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          },
+          {
+            view: gbuf3Tex!.createView(),
+            loadOp: "clear",
+            storeOp: "store",
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          },
         ],
         depthStencilAttachment: {
           view: gbufDepthTex!.createView(),
-          depthLoadOp: "clear", depthStoreOp: "store", depthClearValue: 1.0,
+          depthLoadOp: "clear",
+          depthStoreOp: "store",
+          depthClearValue: 1.0,
         },
       });
 
@@ -877,10 +1555,19 @@ export class WebGPURenderer implements IRenderer {
       // ── Pass 2: Deferred lighting ─────────────────────────────────────
       const lightPass = encoder.beginRenderPass({
         label: "deferred",
-        colorAttachments: [{
-          view: colorView, loadOp: "clear", storeOp: "store",
-          clearValue: { r: skyR, g: skyG, b: skyB, a: 1.0 },
-        }],
+        colorAttachments: [
+          {
+            view: colorView,
+            loadOp: "clear",
+            storeOp: "store",
+            clearValue: {
+              r: skyR,
+              g: skyG,
+              b: skyB,
+              a: 1.0,
+            },
+          },
+        ],
       });
       lightPass.setPipeline(deferredPipeline);
       lightPass.setBindGroup(0, deferredBindGroup!);
@@ -891,12 +1578,17 @@ export class WebGPURenderer implements IRenderer {
       if (cloudsMode !== "off") {
         const cloudPass = encoder.beginRenderPass({
           label: "clouds",
-          colorAttachments: [{
-            view: colorView, loadOp: "load", storeOp: "store",
-          }],
+          colorAttachments: [
+            {
+              view: colorView,
+              loadOp: "load",
+              storeOp: "store",
+            },
+          ],
           depthStencilAttachment: {
             view: gbufDepthTex!.createView(),
-            depthLoadOp: "load", depthStoreOp: "discard",
+            depthLoadOp: "load",
+            depthStoreOp: "discard",
           },
         });
         cloudPass.setPipeline(cloudsPipeline);
@@ -918,12 +1610,17 @@ export class WebGPURenderer implements IRenderer {
       if (showOutline) {
         const outlinePass = encoder.beginRenderPass({
           label: "outline",
-          colorAttachments: [{
-            view: colorView, loadOp: "load", storeOp: "store",
-          }],
+          colorAttachments: [
+            {
+              view: colorView,
+              loadOp: "load",
+              storeOp: "store",
+            },
+          ],
           depthStencilAttachment: {
             view: gbufDepthTex!.createView(),
-            depthLoadOp: "load", depthStoreOp: "discard",
+            depthLoadOp: "load",
+            depthStoreOp: "discard",
           },
         });
         outlinePass.setPipeline(outlinePipeline);
@@ -937,14 +1634,22 @@ export class WebGPURenderer implements IRenderer {
       // ── Pass 5: Tonemap blit (HDR path only) ──────────────────────────
       if (wantHdr && tonemapBindGroup) {
         tonemapUBOData[0] = Settings.brightness;
-        device.queue.writeBuffer(tonemapUBO, 0, tonemapUBOData);
+        device.queue.writeBuffer(
+          tonemapUBO,
+          0,
+          tonemapUBOData,
+        );
 
         const tonemapPass = encoder.beginRenderPass({
           label: "tonemap",
-          colorAttachments: [{
-            view: canvasView, loadOp: "clear", storeOp: "store",
-            clearValue: { r:0, g:0, b:0, a:1 },
-          }],
+          colorAttachments: [
+            {
+              view: canvasView,
+              loadOp: "clear",
+              storeOp: "store",
+              clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            },
+          ],
         });
         tonemapPass.setPipeline(tonemapPipeline);
         tonemapPass.setBindGroup(0, tonemapBindGroup);
@@ -957,10 +1662,10 @@ export class WebGPURenderer implements IRenderer {
       // ── Debug overlay ─────────────────────────────────────────────────
       debug.update(camera, world, {
         drawCalls,
-        totalChunks:   world.chunks.size,
+        totalChunks: world.chunks.size,
         drawnVertices: drawnVerts,
         totalVertices: totalVerts,
-        worldTime:     Time.worldTime,
+        worldTime: Time.worldTime,
       });
     }
 
@@ -1007,7 +1712,9 @@ function reportShaderErrors(name: string) {
   return ({ messages }: GPUCompilationInfo): void => {
     for (const m of messages) {
       if (m.type === "error") {
-        console.error(`[WGSL ${name}] ${m.message} (line ${m.lineNum}:${m.linePos})`);
+        console.error(
+          `[WGSL ${name}] ${m.message} (line ${m.lineNum}:${m.linePos})`,
+        );
       } else if (m.type === "warning") {
         console.warn(`[WGSL ${name}] ${m.message}`);
       }
@@ -1039,12 +1746,15 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+    img.onerror = () =>
+      reject(new Error(`Failed to load image: ${url}`));
     img.src = url;
   });
 }
 
-async function loadCloudTextureCanvas(url?: string): Promise<HTMLCanvasElement> {
+async function loadCloudTextureCanvas(
+  url?: string,
+): Promise<HTMLCanvasElement> {
   if (!url) return buildDefaultCloudCanvas();
   try {
     const img = await loadImage(url);
@@ -1056,12 +1766,17 @@ async function loadCloudTextureCanvas(url?: string): Promise<HTMLCanvasElement> 
     ctx.drawImage(img, 0, 0);
     return canvas;
   } catch (err) {
-    console.warn("[Clouds] failed to load cloud texture, using built-in texture:", err);
+    console.warn(
+      "[Clouds] failed to load cloud texture, using built-in texture:",
+      err,
+    );
     return buildDefaultCloudCanvas();
   }
 }
 
-async function loadSkyboxTextureCanvas(url?: string): Promise<HTMLCanvasElement> {
+async function loadSkyboxTextureCanvas(
+  url?: string,
+): Promise<HTMLCanvasElement> {
   if (url) {
     try {
       const img = await loadImage(url);
@@ -1073,7 +1788,10 @@ async function loadSkyboxTextureCanvas(url?: string): Promise<HTMLCanvasElement>
       ctx.drawImage(img, 0, 0);
       return canvas;
     } catch (err) {
-      console.warn("[Skybox] failed to load skybox texture, using built-in skybox:", err);
+      console.warn(
+        "[Skybox] failed to load skybox texture, using built-in skybox:",
+        err,
+      );
     }
   }
 
@@ -1084,7 +1802,11 @@ async function loadSkyboxTextureCanvas(url?: string): Promise<HTMLCanvasElement>
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
-  const imageData = new ImageData(new Uint8ClampedArray(data), w, h);
+  const imageData = new ImageData(
+    new Uint8ClampedArray(data),
+    w,
+    h,
+  );
   ctx.putImageData(imageData, 0, 0);
   return canvas;
 }

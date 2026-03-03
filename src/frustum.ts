@@ -36,25 +36,70 @@ interface Plane {
  *   frustum.containsAABB(...);  // per chunk
  */
 export class Frustum {
-  private readonly planes: Plane[] = Array.from({ length: 6 }, () => ({
-    a: 0,
-    b: 0,
-    c: 0,
-    d: 0,
-  }));
+  private readonly planes: Plane[] = Array.from(
+    { length: 6 },
+    () => ({
+      a: 0,
+      b: 0,
+      c: 0,
+      d: 0,
+    }),
+  );
 
   /** Rebuild planes from the combined VP matrix (column-major). */
   update(vp: mat4): void {
     const m = vp;
-    this.set(0, m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]); // Left
-    this.set(1, m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]); // Right
-    this.set(2, m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]); // Bottom
-    this.set(3, m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]); // Top
-    this.set(4, m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]); // Near
-    this.set(5, m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]); // Far
+    this.set(
+      0,
+      m[3] + m[0],
+      m[7] + m[4],
+      m[11] + m[8],
+      m[15] + m[12],
+    ); // Left
+    this.set(
+      1,
+      m[3] - m[0],
+      m[7] - m[4],
+      m[11] - m[8],
+      m[15] - m[12],
+    ); // Right
+    this.set(
+      2,
+      m[3] + m[1],
+      m[7] + m[5],
+      m[11] + m[9],
+      m[15] + m[13],
+    ); // Bottom
+    this.set(
+      3,
+      m[3] - m[1],
+      m[7] - m[5],
+      m[11] - m[9],
+      m[15] - m[13],
+    ); // Top
+    this.set(
+      4,
+      m[3] + m[2],
+      m[7] + m[6],
+      m[11] + m[10],
+      m[15] + m[14],
+    ); // Near
+    this.set(
+      5,
+      m[3] - m[2],
+      m[7] - m[6],
+      m[11] - m[10],
+      m[15] - m[14],
+    ); // Far
   }
 
-  private set(i: number, a: number, b: number, c: number, d: number): void {
+  private set(
+    i: number,
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+  ): void {
     const p = this.planes[i];
     p.a = a;
     p.b = b;
@@ -82,7 +127,8 @@ export class Frustum {
       const px = p.a >= 0 ? maxX : minX;
       const py = p.b >= 0 ? maxY : minY;
       const pz = p.c >= 0 ? maxZ : minZ;
-      if (p.a * px + p.b * py + p.c * pz + p.d < 0) return false;
+      if (p.a * px + p.b * py + p.c * pz + p.d < 0)
+        return false;
     }
     return true;
   }

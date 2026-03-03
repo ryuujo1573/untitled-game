@@ -62,7 +62,8 @@ export class Physics {
 
     // ── Gravity (always applied so the player is probed down every frame) ──
     this.velocity[1] += GRAVITY * dt;
-    if (this.velocity[1] < TERMINAL_VEL) this.velocity[1] = TERMINAL_VEL;
+    if (this.velocity[1] < TERMINAL_VEL)
+      this.velocity[1] = TERMINAL_VEL;
 
     // ── Horizontal wish velocity (instant, no friction sim for now) ────────
     this.velocity[0] = wishX * WALK_SPEED;
@@ -122,7 +123,10 @@ export class Physics {
     for (let bx = bx0; bx <= bx1; bx++) {
       for (let by = by0; by <= by1; by++) {
         for (let bz = bz0; bz <= bz1; bz++) {
-          if (this.world.getBlock(bx, by, bz) !== BlockType.Air) {
+          if (
+            this.world.getBlock(bx, by, bz) !==
+            BlockType.Air
+          ) {
             return true;
           }
         }
@@ -131,14 +135,24 @@ export class Physics {
     return false;
   }
 
-  getState(): { velocity: [number, number, number]; onGround: boolean } {
+  getState(): {
+    velocity: [number, number, number];
+    onGround: boolean;
+  } {
     return {
-      velocity: [this.velocity[0], this.velocity[1], this.velocity[2]],
+      velocity: [
+        this.velocity[0],
+        this.velocity[1],
+        this.velocity[2],
+      ],
       onGround: this.onGround,
     };
   }
 
-  setState(state: { velocity: [number, number, number]; onGround: boolean }): void {
+  setState(state: {
+    velocity: [number, number, number];
+    onGround: boolean;
+  }): void {
     this.velocity[0] = state.velocity[0];
     this.velocity[1] = state.velocity[1];
     this.velocity[2] = state.velocity[2];

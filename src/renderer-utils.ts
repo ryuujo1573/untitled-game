@@ -7,7 +7,9 @@ function CompileShaderSource(
   shaderType: number,
 ): WebGLShader | null {
   //Create shader object
-  const shader = gl.createShader(shaderType) as WebGLShader | null;
+  const shader = gl.createShader(
+    shaderType,
+  ) as WebGLShader | null;
   if (!shader) {
     console.error(
       "Failed to create shader inside the CreateShader function...",
@@ -41,7 +43,8 @@ function CreateShaderProgram(
   fragmentShader: WebGLShader,
 ): WebGLProgram | null {
   //Create shader program object
-  const shaderProgram = gl.createProgram() as WebGLProgram | null;
+  const shaderProgram =
+    gl.createProgram() as WebGLProgram | null;
   if (!shaderProgram || !vertexShader || !fragmentShader) {
     console.error(
       "Failed to create shader program inside the CreateProgram function...",
@@ -91,7 +94,11 @@ function CreateShaderMaterial(
     );
     return null;
   }
-  return CreateShaderProgram(gl, vertexShader, fragmentShader);
+  return CreateShaderProgram(
+    gl,
+    vertexShader,
+    fragmentShader,
+  );
 }
 
 const ShaderUtilites = {

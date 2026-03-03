@@ -68,7 +68,11 @@ export class World {
    * Get the block light level (0-15) at world coordinates.
    * Returns 0 for unloaded chunks or out-of-range positions.
    */
-  getBlockLight(wx: number, wy: number, wz: number): number {
+  getBlockLight(
+    wx: number,
+    wy: number,
+    wz: number,
+  ): number {
     if (wy < 0 || wy >= CHUNK_SIZE) return 0;
     const cx = Math.floor(wx / CHUNK_SIZE);
     const cz = Math.floor(wz / CHUNK_SIZE);
@@ -84,7 +88,12 @@ export class World {
    * so the caller can rebuild its mesh, or null if out of range.
    * Triggers a full world-light recomputation.
    */
-  setBlock(wx: number, wy: number, wz: number, type: BlockType): Chunk | null {
+  setBlock(
+    wx: number,
+    wy: number,
+    wz: number,
+    type: BlockType,
+  ): Chunk | null {
     if (wy < 0 || wy >= CHUNK_SIZE) return null;
     const cx = Math.floor(wx / CHUNK_SIZE);
     const cz = Math.floor(wz / CHUNK_SIZE);
@@ -135,11 +144,14 @@ export class World {
                 const r = oreRng(wx, y, wz);
                 let bt = BlockType.Stone;
                 if (r < 0.005) bt = BlockType.DiamondOre;
-                else if (r < 0.013) bt = BlockType.EmeraldOre;
+                else if (r < 0.013)
+                  bt = BlockType.EmeraldOre;
                 else if (r < 0.028) bt = BlockType.GoldOre;
                 else if (r < 0.043) bt = BlockType.LapisOre;
-                else if (r < 0.063) bt = BlockType.RedstoneOre;
-                else if (r < 0.093) bt = BlockType.CopperOre;
+                else if (r < 0.063)
+                  bt = BlockType.RedstoneOre;
+                else if (r < 0.093)
+                  bt = BlockType.CopperOre;
                 else if (r < 0.143) bt = BlockType.IronOre;
                 else if (r < 0.223) bt = BlockType.CoalOre;
                 chunk.setBlock(lx, y, lz, bt);
@@ -155,25 +167,48 @@ export class World {
     recomputeWorldLight(this);
   }
 
-  toSnapshot(): { generator: { kind: "default_heightmap"; gridSize: number }; chunks: Array<{ cx: number; cz: number; blocks: Uint8Array }> } {
+  toSnapshot(): {
+    generator: {
+      kind: "default_heightmap";
+      gridSize: number;
+    };
+    chunks: Array<{
+      cx: number;
+      cz: number;
+      blocks: Uint8Array;
+    }>;
+  } {
     return {
       generator: {
         kind: "default_heightmap",
-        gridSize: this.gridSize || inferGridSize(this.chunks),
+        gridSize:
+          this.gridSize || inferGridSize(this.chunks),
       },
-      chunks: Array.from(this.chunks.values()).map((chunk) => chunk.toSnapshot()),
+      chunks: Array.from(this.chunks.values()).map(
+        (chunk) => chunk.toSnapshot(),
+      ),
     };
   }
 
   static fromSnapshot(snapshot: {
-    generator: { kind: "default_heightmap"; gridSize: number };
-    chunks: Array<{ cx: number; cz: number; blocks: Uint8Array }>;
+    generator: {
+      kind: "default_heightmap";
+      gridSize: number;
+    };
+    chunks: Array<{
+      cx: number;
+      cz: number;
+      blocks: Uint8Array;
+    }>;
   }): World {
     const world = new World();
     world.gridSize = snapshot.generator.gridSize;
     for (const chunkSnapshot of snapshot.chunks) {
       const chunk = Chunk.fromSnapshot(chunkSnapshot);
-      world.chunks.set(world.key(chunk.cx, chunk.cz), chunk);
+      world.chunks.set(
+        world.key(chunk.cx, chunk.cz),
+        chunk,
+      );
     }
     recomputeWorldLight(world);
     return world;
@@ -184,7 +219,11 @@ function inferGridSize(chunks: Map<string, Chunk>): number {
   if (chunks.size === 0) return 0;
   let maxCoord = 0;
   for (const chunk of chunks.values()) {
-    maxCoord = Math.max(maxCoord, chunk.cx + 1, chunk.cz + 1);
+    maxCoord = Math.max(
+      maxCoord,
+      chunk.cx + 1,
+      chunk.cz + 1,
+    );
   }
   return maxCoord;
 }

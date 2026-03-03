@@ -5,7 +5,10 @@ import { Camera } from "./camera";
 import { DebugOverlay } from "./debug";
 import { Frustum } from "./frustum";
 import { InputManager } from "./input";
-import { PauseMenu, type QuitToTitleIntent } from "./pause-menu";
+import {
+  PauseMenu,
+  type QuitToTitleIntent,
+} from "./pause-menu";
 import { mountDropOverlay } from "./drop-overlay";
 import { Physics } from "./physics";
 import { raycast, RayHit } from "./raycaster";
@@ -17,12 +20,18 @@ import { Chunk, CHUNK_SIZE } from "./world/chunk";
 import { World } from "./world/world";
 import type { IRenderer } from "./renderer-interface";
 import type { GameSaveV1 } from "./game/session-types";
-import { captureFromRuntime, hydrateRuntime } from "./game/session-codec";
+import {
+  captureFromRuntime,
+  hydrateRuntime,
+} from "./game/session-codec";
 
 /**
  * Uploads a chunk's mesh to GPU buffers so it can be drawn each frame.
  */
-function uploadChunk(gl: WebGL2RenderingContext, chunk: Chunk): void {
+function uploadChunk(
+  gl: WebGL2RenderingContext,
+  chunk: Chunk,
+): void {
   const mesh = chunk.buildMesh();
   chunk.vertexCount = mesh.vertexCount;
 
@@ -31,7 +40,11 @@ function uploadChunk(gl: WebGL2RenderingContext, chunk: Chunk): void {
   // Position buffer
   chunk.posBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, chunk.posBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    mesh.positions,
+    gl.STATIC_DRAW,
+  );
 
   // UV + light buffer
   chunk.uvBuffer = gl.createBuffer();
@@ -77,20 +90,80 @@ function createWireCube(gl: WebGL2RenderingContext): {
   // prettier-ignore
   const v = new Float32Array([
     // Bottom face (y = lo)
-    lo,lo,lo,  hi,lo,lo,
-    hi,lo,lo,  hi,lo,hi,
-    hi,lo,hi,  lo,lo,hi,
-    lo,lo,hi,  lo,lo,lo,
+    lo,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    lo,
+    lo,
     // Top face (y = hi)
-    lo,hi,lo,  hi,hi,lo,
-    hi,hi,lo,  hi,hi,hi,
-    hi,hi,hi,  lo,hi,hi,
-    lo,hi,hi,  lo,hi,lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    hi,
+    hi,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    lo,
     // Vertical edges
-    lo,lo,lo,  lo,hi,lo,
-    hi,lo,lo,  hi,hi,lo,
-    hi,lo,hi,  hi,hi,hi,
-    lo,lo,hi,  lo,hi,hi,
+    lo,
+    lo,
+    lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    lo,
+    lo,
+    hi,
+    hi,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
+    hi,
+    hi,
+    lo,
+    lo,
+    hi,
+    lo,
+    hi,
+    hi,
   ]);
   const buf = gl.createBuffer()!;
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -106,7 +179,9 @@ interface WebGLSessionHandle {
 async function startWebGLSession(
   gl: WebGL2RenderingContext,
   initialSave: GameSaveV1,
-  hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+  hooks: {
+    onQuitRequested: (intent: QuitToTitleIntent) => void;
+  },
 ): Promise<WebGLSessionHandle> {
   // ── Render state ────────────────────────────────────────
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -134,16 +209,40 @@ async function startWebGLSession(
   }
   gl.useProgram(program);
 
-  const aPosition = gl.getAttribLocation(program, "a_position");
+  const aPosition = gl.getAttribLocation(
+    program,
+    "a_position",
+  );
   const aUVL = gl.getAttribLocation(program, "a_uvl");
-  const uModel = gl.getUniformLocation(program, "u_modelMatrix");
-  const uView = gl.getUniformLocation(program, "u_viewMatrix");
-  const uProj = gl.getUniformLocation(program, "u_projectionMatrix");
+  const uModel = gl.getUniformLocation(
+    program,
+    "u_modelMatrix",
+  );
+  const uView = gl.getUniformLocation(
+    program,
+    "u_viewMatrix",
+  );
+  const uProj = gl.getUniformLocation(
+    program,
+    "u_projectionMatrix",
+  );
   const uAtlas = gl.getUniformLocation(program, "u_atlas");
-  const uAmbient = gl.getUniformLocation(program, "u_ambientLight");
-  const uFogColor = gl.getUniformLocation(program, "u_fogColor");
-  const uFogNear = gl.getUniformLocation(program, "u_fogNear");
-  const uFogFar = gl.getUniformLocation(program, "u_fogFar");
+  const uAmbient = gl.getUniformLocation(
+    program,
+    "u_ambientLight",
+  );
+  const uFogColor = gl.getUniformLocation(
+    program,
+    "u_fogColor",
+  );
+  const uFogNear = gl.getUniformLocation(
+    program,
+    "u_fogNear",
+  );
+  const uFogFar = gl.getUniformLocation(
+    program,
+    "u_fogFar",
+  );
 
   // Load and upload the atlas texture (async: waits for PNG ore images).
   const atlasTexture = await createAtlasTexture(gl);
@@ -152,11 +251,12 @@ async function startWebGLSession(
   gl.uniform1i(uAtlas, 0);
 
   // ── Tonemapping (HDR post-process) ───────────────────────────
-  const tonemapProgram = ShaderUtilites.CreateShaderMaterial(
-    gl,
-    Materials.Tonemap.vertexShader,
-    Materials.Tonemap.fragmentShader,
-  );
+  const tonemapProgram =
+    ShaderUtilites.CreateShaderMaterial(
+      gl,
+      Materials.Tonemap.vertexShader,
+      Materials.Tonemap.fragmentShader,
+    );
   const aTonemapPos = tonemapProgram
     ? gl.getAttribLocation(tonemapProgram, "a_position")
     : -1;
@@ -171,10 +271,13 @@ async function startWebGLSession(
   const quadBuf = gl.createBuffer()!;
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
   // prettier-ignore
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-    -1, -1,   1, -1,  -1,  1,
-    -1,  1,   1, -1,   1,  1,
-  ]), gl.STATIC_DRAW);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([
+      -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,
+    ]),
+    gl.STATIC_DRAW,
+  );
 
   // HDR framebuffer state — recreated when the setting changes.
   let hdrFbo: WebGLFramebuffer | null = null;
@@ -202,14 +305,35 @@ async function startWebGLSession(
       gl.HALF_FLOAT,
       null,
     );
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(
+      gl.TEXTURE_2D,
+      gl.TEXTURE_MIN_FILTER,
+      gl.LINEAR,
+    );
+    gl.texParameteri(
+      gl.TEXTURE_2D,
+      gl.TEXTURE_MAG_FILTER,
+      gl.LINEAR,
+    );
+    gl.texParameteri(
+      gl.TEXTURE_2D,
+      gl.TEXTURE_WRAP_S,
+      gl.CLAMP_TO_EDGE,
+    );
+    gl.texParameteri(
+      gl.TEXTURE_2D,
+      gl.TEXTURE_WRAP_T,
+      gl.CLAMP_TO_EDGE,
+    );
 
     hdrDepth = gl.createRenderbuffer()!;
     gl.bindRenderbuffer(gl.RENDERBUFFER, hdrDepth);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+    gl.renderbufferStorage(
+      gl.RENDERBUFFER,
+      gl.DEPTH_COMPONENT16,
+      w,
+      h,
+    );
 
     hdrFbo = gl.createFramebuffer()!;
     gl.bindFramebuffer(gl.FRAMEBUFFER, hdrFbo);
@@ -257,7 +381,9 @@ async function startWebGLSession(
     (intent) => hooks.onQuitRequested(intent),
   );
   pauseMenu.mount(document.getElementById("pause-root")!);
-  const disposeDropOverlay = mountDropOverlay(document.getElementById("pause-root")!);
+  const disposeDropOverlay = mountDropOverlay(
+    document.getElementById("pause-root")!,
+  );
   const input = new InputManager(
     canvas,
     camera,
@@ -266,15 +392,21 @@ async function startWebGLSession(
     (wx, wy, wz) => rebuildChunk(gl, world, wx, wy, wz),
     pauseMenu,
   );
-  hydrateRuntime(initialSave, { world, camera, physics, input });
+  hydrateRuntime(initialSave, {
+    world,
+    camera,
+    physics,
+    input,
+  });
   const debug = new DebugOverlay(gl);
 
   // ── Block-selection outline ─────────────────────────────────
-  const outlineProgram = ShaderUtilites.CreateShaderMaterial(
-    gl,
-    Materials.Outline.vertexShader,
-    Materials.Outline.fragmentShader,
-  );
+  const outlineProgram =
+    ShaderUtilites.CreateShaderMaterial(
+      gl,
+      Materials.Outline.vertexShader,
+      Materials.Outline.fragmentShader,
+    );
   const aOutlinePos = outlineProgram
     ? gl.getAttribLocation(outlineProgram, "a_position")
     : -1;
@@ -285,7 +417,10 @@ async function startWebGLSession(
     ? gl.getUniformLocation(outlineProgram, "u_viewMatrix")
     : null;
   const uOutlineProj = outlineProgram
-    ? gl.getUniformLocation(outlineProgram, "u_projectionMatrix")
+    ? gl.getUniformLocation(
+        outlineProgram,
+        "u_projectionMatrix",
+      )
     : null;
   const uOutlineAlpha = outlineProgram
     ? gl.getUniformLocation(outlineProgram, "u_alpha")
@@ -346,20 +481,41 @@ async function startWebGLSession(
     // Naturally activates at BOTH dawn and dusk; ~zero deep in the night.
     // Cutoff at sunHeight < -0.3 avoids a ghost glow in the middle of the night.
     const twilight =
-      sunHeight > -0.3 ? Math.exp(-sunHeight * sunHeight * 30.0) : 0.0;
+      sunHeight > -0.3
+        ? Math.exp(-sunHeight * sunHeight * 30.0)
+        : 0.0;
 
     // Colour palette (night → twilight → day)
-    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+    const lerp = (a: number, b: number, t: number) =>
+      a + (b - a) * t;
     // Sky:     deep navy         warm orange/pink      clear blue
-    const skyR = lerp(lerp(0.01, 0.88, twilight), 0.53, dayFactor);
-    const skyG = lerp(lerp(0.01, 0.45, twilight), 0.81, dayFactor);
-    const skyB = lerp(lerp(0.1, 0.22, twilight), 0.92, dayFactor);
+    const skyR = lerp(
+      lerp(0.01, 0.88, twilight),
+      0.53,
+      dayFactor,
+    );
+    const skyG = lerp(
+      lerp(0.01, 0.45, twilight),
+      0.81,
+      dayFactor,
+    );
+    const skyB = lerp(
+      lerp(0.1, 0.22, twilight),
+      0.92,
+      dayFactor,
+    );
     // Ambient: near-black        warm golden           bright warm white
     // In HDR mode scale ambient above 1 so the scene enters tonemapping range.
     const hdrScale = wantHdr ? 1.6 : 1.0;
-    const ambR = lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor) * hdrScale;
-    const ambG = lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor) * hdrScale;
-    const ambB = lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor) * hdrScale;
+    const ambR =
+      lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor) *
+      hdrScale;
+    const ambG =
+      lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor) *
+      hdrScale;
+    const ambB =
+      lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor) *
+      hdrScale;
 
     // ── Render target: HDR FBO or default framebuffer ────────────
     if (wantHdr && hdrFbo) {
@@ -402,7 +558,11 @@ async function startWebGLSession(
       totalVerts += chunk.vertexCount;
     }); // pre-sum
     world.chunks.forEach((chunk) => {
-      if (chunk.vertexCount === 0 || !chunk.posBuffer || !chunk.uvBuffer)
+      if (
+        chunk.vertexCount === 0 ||
+        !chunk.posBuffer ||
+        !chunk.uvBuffer
+      )
         return;
 
       // Frustum cull: skip chunks whose AABB is entirely outside the frustum.
@@ -424,18 +584,36 @@ async function startWebGLSession(
 
       // Model matrix = translate to chunk world position
       mat4.identity(modelMatrix);
-      mat4.translate(modelMatrix, modelMatrix, [wx0, 0, wz0]);
+      mat4.translate(modelMatrix, modelMatrix, [
+        wx0,
+        0,
+        wz0,
+      ]);
       gl.uniformMatrix4fv(uModel, false, modelMatrix);
 
       // Bind position attribute
       gl.enableVertexAttribArray(aPosition);
       gl.bindBuffer(gl.ARRAY_BUFFER, chunk.posBuffer);
-      gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribPointer(
+        aPosition,
+        3,
+        gl.FLOAT,
+        false,
+        0,
+        0,
+      );
 
       // Bind UV + light attribute (vec4: localU, localV, tileIndex, light)
       gl.enableVertexAttribArray(aUVL);
       gl.bindBuffer(gl.ARRAY_BUFFER, chunk.uvBuffer);
-      gl.vertexAttribPointer(aUVL, 4, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribPointer(
+        aUVL,
+        4,
+        gl.FLOAT,
+        false,
+        0,
+        0,
+      );
 
       gl.drawArrays(gl.TRIANGLES, 0, chunk.vertexCount);
       drawnVerts += chunk.vertexCount;
@@ -443,7 +621,11 @@ async function startWebGLSession(
 
     // ── Block-selection outline ──────────────────────────────
     if (outlineProgram && aOutlinePos >= 0) {
-      const hit = raycast(camera.position, camera.getForward(), world);
+      const hit = raycast(
+        camera.position,
+        camera.getForward(),
+        world,
+      );
       if (hit) {
         lastOutlineHit = hit;
         outlineAlpha = 1.0;
@@ -451,7 +633,8 @@ async function startWebGLSession(
         // No block in range: fade out from the last known position.
         outlineAlpha = Math.max(
           0.0,
-          outlineAlpha - Time.deltaTime * OUTLINE_FADE_SPEED,
+          outlineAlpha -
+            Time.deltaTime * OUTLINE_FADE_SPEED,
         );
       }
 
@@ -464,9 +647,21 @@ async function startWebGLSession(
         ]);
 
         gl.useProgram(outlineProgram);
-        gl.uniformMatrix4fv(uOutlineModel, false, modelMatrix);
-        gl.uniformMatrix4fv(uOutlineView, false, viewMatrix);
-        gl.uniformMatrix4fv(uOutlineProj, false, projMatrix);
+        gl.uniformMatrix4fv(
+          uOutlineModel,
+          false,
+          modelMatrix,
+        );
+        gl.uniformMatrix4fv(
+          uOutlineView,
+          false,
+          viewMatrix,
+        );
+        gl.uniformMatrix4fv(
+          uOutlineProj,
+          false,
+          projMatrix,
+        );
         gl.uniform1f(uOutlineAlpha, outlineAlpha);
 
         // Depth test stays ON so only edges on visible faces pass.
@@ -478,7 +673,14 @@ async function startWebGLSession(
 
         gl.enableVertexAttribArray(aOutlinePos);
         gl.bindBuffer(gl.ARRAY_BUFFER, wireCube.buf);
-        gl.vertexAttribPointer(aOutlinePos, 3, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(
+          aOutlinePos,
+          3,
+          gl.FLOAT,
+          false,
+          0,
+          0,
+        );
         gl.lineWidth(2.0); // capped at 1 on most WebGL backends, still a hint
         gl.drawArrays(gl.LINES, 0, wireCube.count);
         gl.disableVertexAttribArray(aOutlinePos);
@@ -488,7 +690,12 @@ async function startWebGLSession(
     }
 
     // ── Tonemapping pass (HDR → SDR blit) ───────────────────────
-    if (wantHdr && hdrFbo && tonemapProgram && aTonemapPos >= 0) {
+    if (
+      wantHdr &&
+      hdrFbo &&
+      tonemapProgram &&
+      aTonemapPos >= 0
+    ) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
@@ -501,7 +708,14 @@ async function startWebGLSession(
 
       gl.enableVertexAttribArray(aTonemapPos);
       gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
-      gl.vertexAttribPointer(aTonemapPos, 2, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribPointer(
+        aTonemapPos,
+        2,
+        gl.FLOAT,
+        false,
+        0,
+        0,
+      );
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.disableVertexAttribArray(aTonemapPos);
 
@@ -557,13 +771,20 @@ export class WebGLRenderer implements IRenderer {
 
   async startSession(
     initialSave: GameSaveV1,
-    hooks: { onQuitRequested: (intent: QuitToTitleIntent) => void },
+    hooks: {
+      onQuitRequested: (intent: QuitToTitleIntent) => void;
+    },
   ): Promise<void> {
-    this.session = await startWebGLSession(this.gl, initialSave, hooks);
+    this.session = await startWebGLSession(
+      this.gl,
+      initialSave,
+      hooks,
+    );
   }
 
   captureSession(): GameSaveV1 {
-    if (!this.session) throw new Error("No active WebGL session");
+    if (!this.session)
+      throw new Error("No active WebGL session");
     return this.session.captureSession();
   }
 

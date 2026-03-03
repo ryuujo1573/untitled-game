@@ -2,7 +2,9 @@ function StartMessages(
   canvasId: string,
   titleWeb: string = "Title Page",
 ): void {
-  const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+  const canvas = document.getElementById(
+    canvasId,
+  ) as HTMLCanvasElement;
   if (!canvas) {
     console.error(`Canvas with id '${canvasId}' not found`);
     return;

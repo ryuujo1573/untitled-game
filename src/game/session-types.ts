@@ -5,7 +5,10 @@ export interface ChunkSnapshotV1 {
 }
 
 export interface WorldSnapshotV1 {
-  generator: { kind: "default_heightmap"; gridSize: number };
+  generator: {
+    kind: "default_heightmap";
+    gridSize: number;
+  };
   chunks: ChunkSnapshotV1[];
 }
 
