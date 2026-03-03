@@ -1,12 +1,12 @@
 import { vec3 } from "gl-matrix";
-import { Camera } from "./camera";
-import { Physics } from "./physics";
-import { World } from "./world/world";
+import type { Camera } from "./camera";
+import type { Physics } from "./physics";
+import type { World } from "./world/world";
 import { BlockType } from "./world/block";
 import { raycast } from "./raycaster";
-import { PauseMenu } from "./pause-menu";
+import type { PauseMenu } from "./pause-menu";
 import {
-  InputBackend,
+  type InputBackend,
   isTauriRuntime,
 } from "./input-backend";
 import { WebInputManager } from "./web-input";

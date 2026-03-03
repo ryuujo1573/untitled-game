@@ -1,5 +1,5 @@
-import { Camera } from "~/camera";
-import { World } from "~/world/world";
+import type { Camera } from "~/camera";
+import type { World } from "~/world/world";
 import { BlockType } from "~/world/block";
 import { raycast } from "~/raycaster";
 import Time from "~/time-manager";

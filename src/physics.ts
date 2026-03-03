@@ -1,6 +1,6 @@
 import { vec3 } from "gl-matrix";
-import { Camera } from "./camera";
-import { World } from "./world/world";
+import type { Camera } from "./camera";
+import type { World } from "./world/world";
 import Time from "./time-manager";
 import { BlockType } from "./world/block";
 

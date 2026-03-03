@@ -1,8 +1,8 @@
 import { BlockType } from "~/world/block";
 import { World } from "~/world/world";
-import { Camera } from "~/camera";
-import { Physics } from "~/physics";
-import { InputManager } from "~/input";
+import type { Camera } from "~/camera";
+import type { Physics } from "~/physics";
+import type { InputManager } from "~/input";
 import Time from "~/time-manager";
 import type { GameSaveV1 } from "~/game/session-types";
 

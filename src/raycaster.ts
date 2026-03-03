@@ -1,5 +1,5 @@
 import { vec3 } from "gl-matrix";
-import { World } from "./world/world";
+import type { World } from "./world/world";
 import { BlockType } from "./world/block";
 
 export interface RayHit {

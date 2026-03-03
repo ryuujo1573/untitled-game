@@ -11,12 +11,12 @@ import {
 } from "./pause-menu";
 import { mountDropOverlay } from "./drop-overlay";
 import { Physics } from "./physics";
-import { raycast, RayHit } from "./raycaster";
+import { raycast, type RayHit } from "./raycaster";
 import ShaderUtilites from "./renderer-utils";
 import { Settings } from "./settings";
 import Materials from "./shader-materials";
 import Time from "./time-manager";
-import { Chunk, CHUNK_SIZE } from "./world/chunk";
+import { type Chunk, CHUNK_SIZE } from "./world/chunk";
 import { World } from "./world/world";
 import type { IRenderer } from "./renderer-interface";
 import type { GameSaveV1 } from "./game/session-types";

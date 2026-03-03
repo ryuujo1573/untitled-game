@@ -13,7 +13,7 @@ export function generateDefaultSkyboxEquirect(
 
   for (let y = 0; y < h; y++) {
     const v = y / (h - 1);
-    const t = clamp01(Math.pow(v, 1.35));
+    const t = clamp01(v ** 1.35);
 
     // Top to bottom gradient (deep azure to pale near horizon).
     let r = mix(18, 126, t);
@@ -22,7 +22,7 @@ export function generateDefaultSkyboxEquirect(
 
     // Bright horizontal horizon border around v = 0.5.
     const horizonBand = Math.exp(
-      -Math.pow((v - 0.5) / 0.02, 2.0),
+      -(((v - 0.5) / 0.02) ** 2.0),
     );
     r += horizonBand * 52;
     g += horizonBand * 54;
@@ -44,7 +44,7 @@ export function generateDefaultSkyboxEquirect(
       const cloudField =
         (cloudWaveA * 0.6 + cloudWaveB * 0.4) * 0.5 + 0.5;
       const cloudBand = Math.exp(
-        -Math.pow((v - 0.43) / 0.12, 2.0),
+        -(((v - 0.43) / 0.12) ** 2.0),
       );
       const cloudMask =
         clamp01((cloudField - 0.62) * 2.3) * cloudBand;
@@ -58,8 +58,8 @@ export function generateDefaultSkyboxEquirect(
         ),
       );
       const sunGlow =
-        Math.exp(-Math.pow(dTheta / 0.22, 2.0)) *
-        Math.exp(-Math.pow((v - 0.47) / 0.09, 2.0));
+        Math.exp(-((dTheta / 0.22) ** 2.0)) *
+        Math.exp(-(((v - 0.47) / 0.09) ** 2.0));
 
       const rr = Math.max(
         0,

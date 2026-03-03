@@ -1,4 +1,4 @@
-import { mat4 } from "gl-matrix";
+import type { mat4 } from "gl-matrix";
 
 /**
  * A single clip-space plane.

@@ -1,4 +1,4 @@
-import { Camera } from "./camera";
+import type { Camera } from "./camera";
 
 /**
  * Interface for input backends (Web vs Native).

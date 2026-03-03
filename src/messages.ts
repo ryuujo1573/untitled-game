@@ -11,7 +11,7 @@ function StartMessages(
   }
 
   // Create a new text element (e.g., a paragraph)
-  let message: string = titleWeb;
+  const message: string = titleWeb;
   const titleElement = document.createElement("h1");
   titleElement.textContent = message;
 

@@ -143,7 +143,7 @@ export class SessionOrchestrator {
     if (!current) return;
 
     const confirmed = window.confirm(
-      `Delete save \"${current.name}\"?`,
+      `Delete save "${current.name}"?`,
     );
     if (!confirmed) return;
 

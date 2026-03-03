@@ -1,5 +1,5 @@
-import { Camera } from "./camera";
-import { InputBackend } from "./input-backend";
+import type { Camera } from "./camera";
+import type { InputBackend } from "./input-backend";
 
 /**
  * WebInputManager handles standard pointer lock behavior for browsers.

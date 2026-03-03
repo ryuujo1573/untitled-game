@@ -18,21 +18,21 @@ class Time {
   // Static methods
   static CalculateTimeVariables(): void {
     // Update the current time in seconds
-    this.now = performance.now() * 0.001;
+    Time.now = performance.now() * 0.001;
 
     // Calculate the time difference between now and before
-    this.deltaTime = Time.now - Time.before;
+    Time.deltaTime = Time.now - Time.before;
 
     // Accumulate the total elapsed time
-    this.time = Time.time + Time.deltaTime;
+    Time.time = Time.time + Time.deltaTime;
 
     // Update before time to the current time for the next cycle
-    this.before = Time.now;
+    Time.before = Time.now;
 
     // Advance normalised day time, wrapping at 1.
-    this.worldTime =
-      (this.worldTime +
-        this.deltaTime / this.DAY_DURATION_SECONDS) %
+    Time.worldTime =
+      (Time.worldTime +
+        Time.deltaTime / Time.DAY_DURATION_SECONDS) %
       1;
   }
 
@@ -42,11 +42,11 @@ class Time {
   }
 
   static getWorldTime(): number {
-    return this.worldTime;
+    return Time.worldTime;
   }
 
   static setWorldTime(value: number): void {
-    this.worldTime = ((value % 1) + 1) % 1;
+    Time.worldTime = ((value % 1) + 1) % 1;
   }
 
   // Instance method Example for static classes

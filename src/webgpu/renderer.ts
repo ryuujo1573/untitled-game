@@ -23,7 +23,7 @@ import { Camera } from "~/camera";
 import { InputManager } from "~/input";
 import { Physics } from "~/physics";
 import { World } from "~/world/world";
-import { Chunk, CHUNK_SIZE } from "~/world/chunk";
+import { type Chunk, CHUNK_SIZE } from "~/world/chunk";
 import { DebugOverlay } from "~/debug";
 import { Frustum } from "~/frustum";
 import { buildAllAtlases } from "~/atlas";
@@ -31,17 +31,11 @@ import { buildAllAtlasesFromManifest } from "~/atlas";
 import { ResourcePackManager } from "~/resource-pack";
 import { raycast, type RayHit } from "~/raycaster";
 import { Settings } from "~/settings";
-import {
-  PauseMenu,
-  type QuitToTitleIntent,
-} from "~/pause-menu.tsx";
+import { PauseMenu, type QuitToTitleIntent } from "~/pause-menu.tsx";
 import { mountDropOverlay } from "~/drop-overlay";
 import Time from "~/time-manager";
 import type { GameSaveV1 } from "~/game/session-types";
-import {
-  captureFromRuntime,
-  hydrateRuntime,
-} from "~/game/session-codec";
+import { captureFromRuntime, hydrateRuntime } from "~/game/session-codec";
 import { ShaderProgramRegistry } from "~/shaderpack/registry";
 import { STAGE_NAMES } from "~/shaderpack/types";
 import { getShaderpackStateSnapshot } from "~/shaderpack/runtime";
@@ -194,8 +188,7 @@ const CLOUD_UBO_FLOATS = 4;
 
 export class WebGPURenderer implements IRenderer {
   private readonly canvas: HTMLCanvasElement;
-  private captureSessionFn: (() => GameSaveV1) | null =
-    null;
+  private captureSessionFn: (() => GameSaveV1) | null = null;
   private destroySessionFn: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -214,8 +207,7 @@ export class WebGPURenderer implements IRenderer {
     const adapter = await navigator.gpu.requestAdapter({
       powerPreference: "high-performance",
     });
-    if (!adapter)
-      throw new Error("No WebGPU adapter available");
+    if (!adapter) throw new Error("No WebGPU adapter available");
     const device = await adapter.requestDevice({
       label: "roughly-a-3d-game",
     });
@@ -228,11 +220,8 @@ export class WebGPURenderer implements IRenderer {
     });
 
     // ── 2. Canvas context ────────────────────────────────────────────────
-    const context = canvas.getContext(
-      "webgpu",
-    ) as GPUCanvasContext;
-    const presentationFormat =
-      navigator.gpu.getPreferredCanvasFormat();
+    const context = canvas.getContext("webgpu") as GPUCanvasContext;
+    const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     context.configure({
       device,
       format: presentationFormat,
@@ -263,21 +252,11 @@ export class WebGPURenderer implements IRenderer {
 
     // Emit compilation errors to console early.
     await Promise.all([
-      gbufModule
-        .getCompilationInfo()
-        .then(reportShaderErrors("gbufTerrain")),
-      deferredModule
-        .getCompilationInfo()
-        .then(reportShaderErrors("deferred")),
-      outlineModule
-        .getCompilationInfo()
-        .then(reportShaderErrors("outline")),
-      tonemapModule
-        .getCompilationInfo()
-        .then(reportShaderErrors("tonemap")),
-      cloudsModule
-        .getCompilationInfo()
-        .then(reportShaderErrors("clouds")),
+      gbufModule.getCompilationInfo().then(reportShaderErrors("gbufTerrain")),
+      deferredModule.getCompilationInfo().then(reportShaderErrors("deferred")),
+      outlineModule.getCompilationInfo().then(reportShaderErrors("outline")),
+      tonemapModule.getCompilationInfo().then(reportShaderErrors("tonemap")),
+      cloudsModule.getCompilationInfo().then(reportShaderErrors("clouds")),
     ]);
 
     // ── 4. Bind group layouts ─────────────────────────────────────────────
@@ -334,38 +313,34 @@ export class WebGPURenderer implements IRenderer {
     // Outline – Group 0: only the view+proj part of GFrameUBO (first 128 bytes
     //   = view mat4 + proj mat4).  outline.wgsl reads FrameUniforms (160 bytes)
     //   which sits within the larger GFrameUBO — minBindingSize covers it.
-    const outlineFrameLayout = device.createBindGroupLayout(
-      {
-        label: "outlineFrame",
-        entries: [
-          {
-            binding: 0,
-            visibility: VS,
-            buffer: {
-              type: "uniform",
-              minBindingSize: 160,
-            },
+    const outlineFrameLayout = device.createBindGroupLayout({
+      label: "outlineFrame",
+      entries: [
+        {
+          binding: 0,
+          visibility: VS,
+          buffer: {
+            type: "uniform",
+            minBindingSize: 160,
           },
-        ],
-      },
-    );
+        },
+      ],
+    });
 
     // Outline – Group 1: model matrix + alpha
-    const outlineChunkLayout = device.createBindGroupLayout(
-      {
-        label: "outlineChunk",
-        entries: [
-          {
-            binding: 0,
-            visibility: VS | FS,
-            buffer: {
-              type: "uniform",
-              minBindingSize: OUTLINE_UBO_SIZE,
-            },
+    const outlineChunkLayout = device.createBindGroupLayout({
+      label: "outlineChunk",
+      entries: [
+        {
+          binding: 0,
+          visibility: VS | FS,
+          buffer: {
+            type: "uniform",
+            minBindingSize: OUTLINE_UBO_SIZE,
           },
-        ],
-      },
-    );
+        },
+      ],
+    });
 
     // Deferred lighting – Group 0: GFrameUBO + 3 GBuffer textures + depth + lightmap
     // Uses textureLoad (integer coords) so no sampler is needed.
@@ -479,25 +454,18 @@ export class WebGPURenderer implements IRenderer {
     const gbufPipelineLayout = device.createPipelineLayout({
       bindGroupLayouts: [gbufFrameLayout, gbufChunkLayout],
     });
-    const outlinePipelineLayout =
-      device.createPipelineLayout({
-        bindGroupLayouts: [
-          outlineFrameLayout,
-          outlineChunkLayout,
-        ],
-      });
-    const deferredPipelineLayout =
-      device.createPipelineLayout({
-        bindGroupLayouts: [deferredLayout],
-      });
-    const cloudsPipelineLayout =
-      device.createPipelineLayout({
-        bindGroupLayouts: [cloudsLayout],
-      });
-    const tonemapPipelineLayout =
-      device.createPipelineLayout({
-        bindGroupLayouts: [tonemapLayout],
-      });
+    const outlinePipelineLayout = device.createPipelineLayout({
+      bindGroupLayouts: [outlineFrameLayout, outlineChunkLayout],
+    });
+    const deferredPipelineLayout = device.createPipelineLayout({
+      bindGroupLayouts: [deferredLayout],
+    });
+    const cloudsPipelineLayout = device.createPipelineLayout({
+      bindGroupLayouts: [cloudsLayout],
+    });
+    const tonemapPipelineLayout = device.createPipelineLayout({
+      bindGroupLayouts: [tonemapLayout],
+    });
 
     // GBuffer terrain pipeline: 5 vertex buffer slots, 4 MRT outputs + depth.
     const gbufPipeline = device.createRenderPipeline({
@@ -741,9 +709,7 @@ export class WebGPURenderer implements IRenderer {
     }
 
     const atlasBundle = resourcePacks.getAtlasManifest()
-      ? await buildAllAtlasesFromManifest(
-          resourcePacks.getAtlasManifest(),
-        )
+      ? await buildAllAtlasesFromManifest(resourcePacks.getAtlasManifest())
       : await buildAllAtlases();
 
     const {
@@ -791,18 +757,9 @@ export class WebGPURenderer implements IRenderer {
       return tex;
     };
 
-    const albedoAtlasTex = uploadAtlas(
-      albedoCanvas,
-      "albedoAtlas",
-    );
-    const normalAtlasTex = uploadAtlas(
-      normalCanvas,
-      "normalAtlas",
-    );
-    const specularAtlasTex = uploadAtlas(
-      specularCanvas,
-      "specularAtlas",
-    );
+    const albedoAtlasTex = uploadAtlas(albedoCanvas, "albedoAtlas");
+    const normalAtlasTex = uploadAtlas(normalCanvas, "normalAtlas");
+    const specularAtlasTex = uploadAtlas(specularCanvas, "specularAtlas");
     const cloudCanvas = await loadCloudTextureCanvas(
       resourcePacks.getCloudTextureUrl(),
     );
@@ -810,10 +767,7 @@ export class WebGPURenderer implements IRenderer {
     const skyboxCanvas = await loadSkyboxTextureCanvas(
       resourcePacks.getSkyboxTextureUrl(),
     );
-    const skyboxTex = uploadAtlas(
-      skyboxCanvas,
-      "skyboxTex",
-    );
+    const skyboxTex = uploadAtlas(skyboxCanvas, "skyboxTex");
 
     // Nearest sampler for atlas reads (GBuffer pass), linear sampler for tonemap.
     const atlasSampler = device.createSampler({
@@ -849,37 +803,27 @@ export class WebGPURenderer implements IRenderer {
     const gframeUBO = device.createBuffer({
       label: "gframeUBO",
       size: GFRAME_UBO_SIZE,
-      usage:
-        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    const gframeUBOData = new Float32Array(
-      GFRAME_UBO_FLOATS,
-    );
+    const gframeUBOData = new Float32Array(GFRAME_UBO_FLOATS);
 
     const outlineUBO = device.createBuffer({
       label: "outlineUBO",
       size: OUTLINE_UBO_SIZE,
-      usage:
-        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    const outlineUBOData = new Float32Array(
-      OUTLINE_UBO_FLOATS,
-    );
+    const outlineUBOData = new Float32Array(OUTLINE_UBO_FLOATS);
 
     const tonemapUBO = device.createBuffer({
       label: "tonemapUBO",
       size: TONEMAP_UBO_SIZE,
-      usage:
-        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    const tonemapUBOData = new Float32Array(
-      TONEMAP_UBO_FLOATS,
-    );
+    const tonemapUBOData = new Float32Array(TONEMAP_UBO_FLOATS);
     const cloudUBO = device.createBuffer({
       label: "cloudUBO",
       size: CLOUD_UBO_SIZE,
-      usage:
-        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const cloudUBOData = new Float32Array(CLOUD_UBO_FLOATS);
 
@@ -887,13 +831,10 @@ export class WebGPURenderer implements IRenderer {
     const wireCubeBuf = device.createBuffer({
       label: "wireCube",
       size: WIRE_CUBE.byteLength,
-      usage:
-        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(wireCubeBuf.getMappedRange()).set(
-      WIRE_CUBE,
-    );
+    new Float32Array(wireCubeBuf.getMappedRange()).set(WIRE_CUBE);
     wireCubeBuf.unmap();
 
     const cloudMeshFancy = buildCloudMesh({
@@ -913,8 +854,7 @@ export class WebGPURenderer implements IRenderer {
     const cloudPosFancy = device.createBuffer({
       label: "cloudPosFancy",
       size: cloudMeshFancy.positions.byteLength,
-      usage:
-        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
     new Float32Array(cloudPosFancy.getMappedRange()).set(
@@ -925,20 +865,16 @@ export class WebGPURenderer implements IRenderer {
     const cloudUvFancy = device.createBuffer({
       label: "cloudUvFancy",
       size: cloudMeshFancy.uvs.byteLength,
-      usage:
-        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(cloudUvFancy.getMappedRange()).set(
-      cloudMeshFancy.uvs,
-    );
+    new Float32Array(cloudUvFancy.getMappedRange()).set(cloudMeshFancy.uvs);
     cloudUvFancy.unmap();
 
     const cloudPosFast = device.createBuffer({
       label: "cloudPosFast",
       size: cloudMeshFast.positions.byteLength,
-      usage:
-        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
     new Float32Array(cloudPosFast.getMappedRange()).set(
@@ -949,13 +885,10 @@ export class WebGPURenderer implements IRenderer {
     const cloudUvFast = device.createBuffer({
       label: "cloudUvFast",
       size: cloudMeshFast.uvs.byteLength,
-      usage:
-        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
-    new Float32Array(cloudUvFast.getMappedRange()).set(
-      cloudMeshFast.uvs,
-    );
+    new Float32Array(cloudUvFast.getMappedRange()).set(cloudMeshFast.uvs);
     cloudUvFast.unmap();
 
     // ── 8. Mutable pipeline / texture state ──────────────────────────────
@@ -969,15 +902,9 @@ export class WebGPURenderer implements IRenderer {
     let gbuf3Tex: GPUTexture | null = null; // rgba8unorm  lightmap (sky r, block g)
     let gbufDepthTex: GPUTexture | null = null; // depth24plus (sampleable)
 
-    let deferredPipeline = buildDeferredPipeline(
-      presentationFormat,
-    );
-    let outlinePipeline = buildOutlinePipeline(
-      presentationFormat,
-    );
-    let cloudsPipeline = buildCloudPipeline(
-      presentationFormat,
-    );
+    let deferredPipeline = buildDeferredPipeline(presentationFormat);
+    let outlinePipeline = buildOutlinePipeline(presentationFormat);
+    let cloudsPipeline = buildCloudPipeline(presentationFormat);
 
     // GBuffer frame bind group (3 atlas textures; rebuilt once here, stable).
     const gbufFrameBindGroup = device.createBindGroup({
@@ -1005,16 +932,12 @@ export class WebGPURenderer implements IRenderer {
     const outlineFrameBindGroup = device.createBindGroup({
       label: "outlineFrame",
       layout: outlineFrameLayout,
-      entries: [
-        { binding: 0, resource: { buffer: gframeUBO } },
-      ],
+      entries: [{ binding: 0, resource: { buffer: gframeUBO } }],
     });
     const outlineChunkBindGroup = device.createBindGroup({
       label: "outlineChunk",
       layout: outlineChunkLayout,
-      entries: [
-        { binding: 0, resource: { buffer: outlineUBO } },
-      ],
+      entries: [{ binding: 0, resource: { buffer: outlineUBO } }],
     });
 
     let deferredBindGroup: GPUBindGroup | null = null;
@@ -1046,17 +969,13 @@ export class WebGPURenderer implements IRenderer {
       gbuf3Tex?.destroy();
       gbufDepthTex?.destroy();
 
-      const mkTex = (
-        fmt: GPUTextureFormat,
-        label: string,
-      ) =>
+      const mkTex = (fmt: GPUTextureFormat, label: string) =>
         device.createTexture({
           label,
           size: { width: w, height: h },
           format: fmt,
           usage:
-            GPUTextureUsage.RENDER_ATTACHMENT |
-            GPUTextureUsage.TEXTURE_BINDING,
+            GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
 
       gbuf0Tex = mkTex("rgba8unorm", "gbuf0");
@@ -1091,8 +1010,7 @@ export class WebGPURenderer implements IRenderer {
         size: { width: w, height: h },
         format: "rgba16float",
         usage:
-          GPUTextureUsage.RENDER_ATTACHMENT |
-          GPUTextureUsage.TEXTURE_BINDING,
+          GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
       tonemapBindGroup = device.createBindGroup({
         label: "tonemap",
@@ -1103,8 +1021,7 @@ export class WebGPURenderer implements IRenderer {
           { binding: 2, resource: { buffer: tonemapUBO } },
         ],
       });
-      deferredPipeline =
-        buildDeferredPipeline("rgba16float");
+      deferredPipeline = buildDeferredPipeline("rgba16float");
       outlinePipeline = buildOutlinePipeline("rgba16float");
       cloudsPipeline = buildCloudPipeline("rgba16float");
       hdrActive = true;
@@ -1114,15 +1031,9 @@ export class WebGPURenderer implements IRenderer {
       hdrTex?.destroy();
       hdrTex = null;
       tonemapBindGroup = null;
-      deferredPipeline = buildDeferredPipeline(
-        presentationFormat,
-      );
-      outlinePipeline = buildOutlinePipeline(
-        presentationFormat,
-      );
-      cloudsPipeline = buildCloudPipeline(
-        presentationFormat,
-      );
+      deferredPipeline = buildDeferredPipeline(presentationFormat);
+      outlinePipeline = buildOutlinePipeline(presentationFormat);
+      cloudsPipeline = buildCloudPipeline(presentationFormat);
       hdrActive = false;
     }
 
@@ -1142,15 +1053,11 @@ export class WebGPURenderer implements IRenderer {
       const mesh = chunk.buildMesh();
       if (mesh.vertexCount === 0) return;
 
-      const mkVB = (
-        data: Float32Array,
-        label: string,
-      ): GPUBuffer => {
+      const mkVB = (data: Float32Array, label: string): GPUBuffer => {
         const buf = device.createBuffer({
           label,
           size: data.byteLength,
-          usage:
-            GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
           mappedAtCreation: true,
         });
         new Float32Array(buf.getMappedRange()).set(data);
@@ -1158,26 +1065,11 @@ export class WebGPURenderer implements IRenderer {
         return buf;
       };
 
-      const posBuffer = mkVB(
-        mesh.positions,
-        `pos(${chunk.cx},${chunk.cz})`,
-      );
-      const uvlBuffer = mkVB(
-        mesh.uvls,
-        `uvl(${chunk.cx},${chunk.cz})`,
-      );
-      const norBuffer = mkVB(
-        mesh.normals,
-        `nor(${chunk.cx},${chunk.cz})`,
-      );
-      const tanBuffer = mkVB(
-        mesh.tangents,
-        `tan(${chunk.cx},${chunk.cz})`,
-      );
-      const lightBuffer = mkVB(
-        mesh.lights,
-        `lgt(${chunk.cx},${chunk.cz})`,
-      );
+      const posBuffer = mkVB(mesh.positions, `pos(${chunk.cx},${chunk.cz})`);
+      const uvlBuffer = mkVB(mesh.uvls, `uvl(${chunk.cx},${chunk.cz})`);
+      const norBuffer = mkVB(mesh.normals, `nor(${chunk.cx},${chunk.cz})`);
+      const tanBuffer = mkVB(mesh.tangents, `tan(${chunk.cx},${chunk.cz})`);
+      const lightBuffer = mkVB(mesh.lights, `lgt(${chunk.cx},${chunk.cz})`);
 
       const modelMat = mat4.create();
       mat4.translate(modelMat, modelMat, [
@@ -1189,21 +1081,16 @@ export class WebGPURenderer implements IRenderer {
       const modelBuffer = device.createBuffer({
         label: `model(${chunk.cx},${chunk.cz})`,
         size: 64,
-        usage:
-          GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         mappedAtCreation: true,
       });
-      new Float32Array(modelBuffer.getMappedRange()).set(
-        modelMat,
-      );
+      new Float32Array(modelBuffer.getMappedRange()).set(modelMat);
       modelBuffer.unmap();
 
       const bindGroup = device.createBindGroup({
         label: `chunkBG(${chunk.cx},${chunk.cz})`,
         layout: gbufChunkLayout,
-        entries: [
-          { binding: 0, resource: { buffer: modelBuffer } },
-        ],
+        entries: [{ binding: 0, resource: { buffer: modelBuffer } }],
       });
 
       chunkData.set(chunk, {
@@ -1218,11 +1105,7 @@ export class WebGPURenderer implements IRenderer {
       });
     }
 
-    function rebuildChunk(
-      wx: number,
-      _wy: number,
-      wz: number,
-    ): void {
+    function rebuildChunk(wx: number, _wy: number, wz: number): void {
       const chunk = world.getChunk(
         Math.floor(wx / CHUNK_SIZE),
         Math.floor(wz / CHUNK_SIZE),
@@ -1270,7 +1153,7 @@ export class WebGPURenderer implements IRenderer {
       input,
     });
 
-    world.chunks.forEach((chunk) => uploadChunk(chunk));
+    world.chunks.forEach(uploadChunk);
 
     // ── Outline state ─────────────────────────────────────────────────────
     let lastHit: RayHit | null = null;
@@ -1290,16 +1173,13 @@ export class WebGPURenderer implements IRenderer {
       Time.CalculateTimeVariables();
       input.update();
 
-      const shaderpackSnapshot =
-        getShaderpackStateSnapshot();
+      const shaderpackSnapshot = getShaderpackStateSnapshot();
       shaderRegistry.sync(shaderpackSnapshot.stageStatuses);
       const cloudsMode =
-        shaderpackSnapshot.manifest?.properties.clouds ??
-        "fancy";
+        shaderpackSnapshot.manifest?.properties.clouds ?? "fancy";
 
       const wantHdr = Settings.hdr && Settings.hdrSupported;
-      if (wantHdr && !hdrActive)
-        buildHDR(canvas.width, canvas.height);
+      if (wantHdr && !hdrActive) buildHDR(canvas.width, canvas.height);
       else if (!wantHdr && hdrActive) destroyHDR();
 
       // ── Day-night cycle ───────────────────────────────────────────────
@@ -1308,67 +1188,38 @@ export class WebGPURenderer implements IRenderer {
       const sunHeight = Math.sin(sunAngle);
       const dayFactor = Math.max(0.0, sunHeight);
       const twilight =
-        sunHeight > -0.3
-          ? Math.exp(-sunHeight * sunHeight * 30.0)
-          : 0.0;
-      const lerp = (a: number, b: number, t: number) =>
-        a + (b - a) * t;
+        sunHeight > -0.3 ? Math.exp(-sunHeight * sunHeight * 30.0) : 0.0;
+      const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-      const skyR = lerp(
-        lerp(0.01, 0.88, twilight),
-        0.53,
-        dayFactor,
-      );
-      const skyG = lerp(
-        lerp(0.01, 0.45, twilight),
-        0.81,
-        dayFactor,
-      );
-      const skyB = lerp(
-        lerp(0.1, 0.22, twilight),
-        0.92,
-        dayFactor,
-      );
+      const skyR = lerp(lerp(0.01, 0.88, twilight), 0.53, dayFactor);
+      const skyG = lerp(lerp(0.01, 0.45, twilight), 0.81, dayFactor);
+      const skyB = lerp(lerp(0.1, 0.22, twilight), 0.92, dayFactor);
 
       const hdrScale = wantHdr ? 1.6 : 1.0;
       const brt = wantHdr ? 1.0 : Settings.brightness;
       const ambR =
-        lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor) *
-        hdrScale *
-        brt;
+        lerp(lerp(0.03, 0.75, twilight), 1.0, dayFactor) * hdrScale * brt;
       const ambG =
-        lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor) *
-        hdrScale *
-        brt;
+        lerp(lerp(0.03, 0.48, twilight), 0.92, dayFactor) * hdrScale * brt;
       const ambB =
-        lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor) *
-        hdrScale *
-        brt;
+        lerp(lerp(0.1, 0.22, twilight), 0.8, dayFactor) * hdrScale * brt;
 
       // Sun strength (brighter than ambient; zero at night).
-      const sunStr =
-        (dayFactor * 1.5 + twilight * 0.3) * hdrScale * brt;
+      const sunStr = (dayFactor * 1.5 + twilight * 0.3) * hdrScale * brt;
 
       // ── Camera matrices ───────────────────────────────────────────────
       const aspect = canvas.width / canvas.height;
       const viewMatrix = camera.getViewMatrix();
       // ZO projection for correct WebGPU depth range [0, 1].
-      const projMatrixZO =
-        camera.getProjectionMatrixZO(aspect);
+      const projMatrixZO = camera.getProjectionMatrixZO(aspect);
       // Standard perspective for frustum culling only (both work for culling).
       const projMatrix = camera.getProjectionMatrix(aspect);
       mat4.multiply(vpMatrix, projMatrix, viewMatrix);
       frustum.update(vpMatrix);
 
       // Inverse matrices for the deferred lighting pass.
-      const viewInv = mat4.invert(
-        mat4.create(),
-        viewMatrix,
-      )!;
-      const projInv = mat4.invert(
-        mat4.create(),
-        projMatrixZO,
-      )!;
+      const viewInv = mat4.invert(mat4.create(), viewMatrix)!;
+      const projInv = mat4.invert(mat4.create(), projMatrixZO)!;
 
       // Sun direction: (0, sin(sunAngle), -cos(sunAngle)) → transform to view space.
       // gl-matrix column-major: M*v = result.x = M[0]*vx + M[4]*vy + M[8]*vz  (w=0 dir).
@@ -1378,8 +1229,7 @@ export class WebGPURenderer implements IRenderer {
       const svx = vm[4] * sdY + vm[8] * sdZ;
       const svy = vm[5] * sdY + vm[9] * sdZ;
       const svz = vm[6] * sdY + vm[10] * sdZ;
-      const svLen =
-        Math.sqrt(svx * svx + svy * svy + svz * svz) || 1;
+      const svLen = Math.sqrt(svx * svx + svy * svy + svz * svz) || 1;
 
       // ── GFrameUBO write ───────────────────────────────────────────────
       gframeUBOData.set(viewMatrix, 0); // view         [0..15]
@@ -1407,20 +1257,14 @@ export class WebGPURenderer implements IRenderer {
       device.queue.writeBuffer(gframeUBO, 0, gframeUBOData);
 
       const cloudWind = Time.time * 0.75;
-      cloudUBOData[0] =
-        camera.position[0] * 0.2 + cloudWind;
-      cloudUBOData[1] =
-        camera.position[2] * 0.2 + cloudWind * 0.6;
+      cloudUBOData[0] = camera.position[0] * 0.2 + cloudWind;
+      cloudUBOData[1] = camera.position[2] * 0.2 + cloudWind * 0.6;
       cloudUBOData[2] = dayFactor > 0.0 ? 0.8 : 0.55;
       cloudUBOData[3] = cloudsMode === "fast" ? 2.0 : 1.0;
       device.queue.writeBuffer(cloudUBO, 0, cloudUBOData);
 
       // ── Outline UBO write ─────────────────────────────────────────────
-      const hit = raycast(
-        camera.position,
-        camera.getForward(),
-        world,
-      );
+      const hit = raycast(camera.position, camera.getForward(), world);
       if (hit) {
         lastHit = hit;
         outlineAlpha = 1.0;
@@ -1430,8 +1274,7 @@ export class WebGPURenderer implements IRenderer {
           outlineAlpha - Time.deltaTime * OUTLINE_FADE,
         );
 
-      const showOutline =
-        outlineAlpha > 0.0 && lastHit !== null;
+      const showOutline = outlineAlpha > 0.0 && lastHit !== null;
       if (showOutline && lastHit) {
         mat4.identity(scratchMat);
         mat4.translate(scratchMat, scratchMat, [
@@ -1441,21 +1284,14 @@ export class WebGPURenderer implements IRenderer {
         ]);
         outlineUBOData.set(scratchMat, 0);
         outlineUBOData[16] = outlineAlpha;
-        device.queue.writeBuffer(
-          outlineUBO,
-          0,
-          outlineUBOData,
-        );
+        device.queue.writeBuffer(outlineUBO, 0, outlineUBOData);
       }
 
       // ── Render targets ────────────────────────────────────────────────
       const canvasTex = context.getCurrentTexture();
       const canvasView = canvasTex.createView();
       // Deferred + outline write to HDR tex (HDR path) or canvas (LDR path).
-      const colorView =
-        wantHdr && hdrTex
-          ? hdrTex.createView()
-          : canvasView;
+      const colorView = wantHdr && hdrTex ? hdrTex.createView() : canvasView;
 
       // ── Command encoding ──────────────────────────────────────────────
       const encoder = device.createCommandEncoder({
@@ -1634,11 +1470,7 @@ export class WebGPURenderer implements IRenderer {
       // ── Pass 5: Tonemap blit (HDR path only) ──────────────────────────
       if (wantHdr && tonemapBindGroup) {
         tonemapUBOData[0] = Settings.brightness;
-        device.queue.writeBuffer(
-          tonemapUBO,
-          0,
-          tonemapUBOData,
-        );
+        device.queue.writeBuffer(tonemapUBO, 0, tonemapUBOData);
 
         const tonemapPass = encoder.beginRenderPass({
           label: "tonemap",
@@ -1746,8 +1578,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () =>
-      reject(new Error(`Failed to load image: ${url}`));
+    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
     img.src = url;
   });
 }
@@ -1802,11 +1633,7 @@ async function loadSkyboxTextureCanvas(
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
-  const imageData = new ImageData(
-    new Uint8ClampedArray(data),
-    w,
-    h,
-  );
+  const imageData = new ImageData(new Uint8ClampedArray(data), w, h);
   ctx.putImageData(imageData, 0, 0);
   return canvas;
 }
