@@ -1050,7 +1050,7 @@ export class WebGPURenderer implements IRenderer {
         chunkData.delete(chunk);
       }
 
-      const mesh = chunk.buildMesh();
+      const mesh = chunk.buildMesh(world);
       if (mesh.vertexCount === 0) return;
 
       const mkVB = (data: Float32Array, label: string): GPUBuffer => {
@@ -1106,11 +1106,22 @@ export class WebGPURenderer implements IRenderer {
     }
 
     function rebuildChunk(wx: number, _wy: number, wz: number): void {
-      const chunk = world.getChunk(
-        Math.floor(wx / CHUNK_SIZE),
-        Math.floor(wz / CHUNK_SIZE),
-      );
-      if (chunk) uploadChunk(chunk);
+      const cx = Math.floor(wx / CHUNK_SIZE);
+      const cz = Math.floor(wz / CHUNK_SIZE);
+
+      // Rebuild the affected chunk and all 4 neighbors (light can affect boundary faces)
+      for (const [dcx, dcz] of [
+        [0, 0],
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ]) {
+        const ncx = cx + dcx;
+        const ncz = cz + dcz;
+        const chunk = world.getChunk(ncx, ncz);
+        if (chunk) uploadChunk(chunk);
+      }
     }
 
     // ── Resize ────────────────────────────────────────────────────────────

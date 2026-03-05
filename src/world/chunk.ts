@@ -1,4 +1,5 @@
 import { BlockType, BlockFaceTile } from "./block";
+import type { World } from "./world";
 
 export const CHUNK_SIZE = 16;
 const TOTAL = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE; // 4096
@@ -268,8 +269,12 @@ export class Chunk {
    * Merging only happens when tile index AND light levels are equal, so
    * a gradient of sky light across a cliff face is never collapsed into a
    * single incorrectly-lit quad.
+   *
+   * @param world - Optional World reference for cross-chunk light sampling.
+   *                 When provided, enables correct lighting at chunk boundaries
+   *                 by sampling light from neighboring chunks.
    */
-  buildMesh(): ChunkMesh {
+  buildMesh(world?: World): ChunkMesh {
     const positions: number[] = [];
     const uvls: number[] = []; // 4 components per vertex: [localU, localV, tileIndex, light]
     const normals: number[] = []; // 3 components per vertex
@@ -322,8 +327,17 @@ export class Chunk {
               continue;
 
             // Sample light at the air-side neighbor block.
-            const skyL = this.getSkyLight(nx, ny, nz);
-            const blockL = this.getBlockLight(nx, ny, nz);
+            // Use world reference for cross-chunk light sampling when available.
+            let skyL: number, blockL: number;
+            if (world) {
+              const wx = this.cx * N + nx;
+              const wz = this.cz * N + nz;
+              skyL = world.getSkyLight(wx, ny, wz);
+              blockL = world.getBlockLight(wx, ny, wz);
+            } else {
+              skyL = this.getSkyLight(nx, ny, nz);
+              blockL = this.getBlockLight(nx, ny, nz);
+            }
 
             const faceTiles = BlockFaceTile[block] ?? [
               3, 3, 3, 3, 3, 3,

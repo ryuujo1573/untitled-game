@@ -31,8 +31,9 @@ import {
 function uploadChunk(
   gl: WebGL2RenderingContext,
   chunk: Chunk,
+  world: World,
 ): void {
-  const mesh = chunk.buildMesh();
+  const mesh = chunk.buildMesh(world);
   chunk.vertexCount = mesh.vertexCount;
 
   if (chunk.vertexCount === 0) return;
@@ -53,8 +54,9 @@ function uploadChunk(
 }
 
 /**
- * Rebuilds and re-uploads the GPU buffers for the chunk that contains (wx,_,wz).
- * Call this after placing or breaking a block.
+ * Rebuilds and re-uploads the GPU buffers for the chunk that contains (wx,_,wz)
+ * and its neighboring chunks. Light changes can affect boundary faces in
+ * adjacent chunks, so all affected chunks must be rebuilt.
  */
 function rebuildChunk(
   gl: WebGL2RenderingContext,
@@ -65,14 +67,20 @@ function rebuildChunk(
 ): void {
   const cx = Math.floor(wx / CHUNK_SIZE);
   const cz = Math.floor(wz / CHUNK_SIZE);
-  const chunk = world.getChunk(cx, cz);
-  if (!chunk) return;
-  // Delete old buffers.
-  if (chunk.posBuffer) gl.deleteBuffer(chunk.posBuffer);
-  if (chunk.uvBuffer) gl.deleteBuffer(chunk.uvBuffer);
-  chunk.posBuffer = null;
-  chunk.uvBuffer = null;
-  uploadChunk(gl, chunk);
+
+  // Rebuild the affected chunk and all 4 neighbors (light can affect boundary faces)
+  for (const [dcx, dcz] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
+    const ncx = cx + dcx;
+    const ncz = cz + dcz;
+    const chunk = world.getChunk(ncx, ncz);
+    if (!chunk) continue;
+    // Delete old buffers.
+    if (chunk.posBuffer) gl.deleteBuffer(chunk.posBuffer);
+    if (chunk.uvBuffer) gl.deleteBuffer(chunk.uvBuffer);
+    chunk.posBuffer = null;
+    chunk.uvBuffer = null;
+    uploadChunk(gl, chunk, world);
+  }
 }
 
 /**
@@ -371,6 +379,19 @@ async function startWebGLSession(
     hdrActive = false;
   }
 
+  /** Free GPU buffers for a single chunk. */
+  function freeChunkBuffers(chunk: Chunk): void {
+    if (chunk.posBuffer) {
+      gl.deleteBuffer(chunk.posBuffer);
+      chunk.posBuffer = null;
+    }
+    if (chunk.uvBuffer) {
+      gl.deleteBuffer(chunk.uvBuffer);
+      chunk.uvBuffer = null;
+    }
+    chunk.vertexCount = 0;
+  }
+
   // ── Camera & input ──────────────────────────────────────
   const canvas = gl.canvas as HTMLCanvasElement;
   const camera = new Camera();
@@ -428,7 +449,7 @@ async function startWebGLSession(
   const wireCube = createWireCube(gl);
 
   // Upload all chunk meshes
-  world.chunks.forEach((chunk) => uploadChunk(gl, chunk));
+  world.chunks.forEach((chunk) => uploadChunk(gl, chunk, world));
 
   // ── Resize handler ──────────────────────────────────────────────
   function resize() {
@@ -752,6 +773,16 @@ async function startWebGLSession(
       running = false;
       if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", resize);
+
+      world.chunks.forEach((chunk) => freeChunkBuffers(chunk));
+
+      gl.deleteBuffer(wireCube.buf);
+      gl.deleteBuffer(quadBuf);
+      gl.deleteTexture(atlasTexture);
+      if (program) gl.deleteProgram(program);
+      if (outlineProgram) gl.deleteProgram(outlineProgram);
+      if (tonemapProgram) gl.deleteProgram(tonemapProgram);
+
       input.destroy();
       pauseMenu.destroy();
       disposeDropOverlay();
