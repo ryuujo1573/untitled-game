@@ -1,4 +1,4 @@
-# Voxxer
+# untitled-game
 
 Experimental Minecraft-like voxel renderer/sandbox written in TypeScript.
 
@@ -7,6 +7,8 @@ Experimental Minecraft-like voxel renderer/sandbox written in TypeScript.
 - Shaderpacks: load + parse Iris/OptiFine-style packs (not executed yet)
 
 ## Status
+
+Roughly a 3D Game.
 
 This repo started as a WebGL triangle scaffold and has evolved into a voxel engine prototype. It is active WIP and not feature-complete.
 

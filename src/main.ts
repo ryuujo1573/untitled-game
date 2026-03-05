@@ -5,8 +5,7 @@ async function main() {
     "webglCanvas",
   ) as HTMLCanvasElement | null;
   if (!canvas) {
-    document.body.textContent =
-      "⚠️ Canvas element not found.";
+    document.body.textContent = "⚠️ Canvas element not found.";
     return;
   }
   startSessionOrchestrator(canvas);

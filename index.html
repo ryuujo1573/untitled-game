@@ -7,11 +7,19 @@
     <title>untitled-game</title>
     <link rel="stylesheet" href="./src/style.css" />
   </head>
-  <body class="bg-black overflow-hidden h-full w-full touch-none" data-app-mode="title">
+  <body
+    class="bg-black overflow-hidden h-full w-full touch-none"
+    data-app-mode="title"
+  >
     <canvas id="webglCanvas" tabindex="-1" contenteditable="false"></canvas>
 
     <!-- Invisible Input to trap IME -->
-    <input type="text" id="ime-trap" style="position: absolute; opacity: 0; pointer-events: none; z-index: -1;" readonly />
+    <input
+      type="text"
+      id="ime-trap"
+      style="position: absolute; opacity: 0; pointer-events: none; z-index: -1"
+      readonly
+    />
 
     <!-- Crosshair (text-shadow applied via CSS rule) -->
     <div id="crosshair">+</div>
@@ -50,6 +58,12 @@
     <div id="pause-root"></div>
     <div id="chat-root"></div>
     <div id="title-root"></div>
+    <div
+      id="version-root"
+      class="absolute top-0 right-0 m-2 p-2 bg-amber-500/10 text-white rounded-xl"
+    >
+      %VITE_VERSION% (%VITE_GIT_HASH%)
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

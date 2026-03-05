@@ -1,11 +1,11 @@
 {
   "name": "untitled-game",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && bun x --bun vite build",
+    "build": "tsc && git_hash=$(git rev-parse --short HEAD) bun x --bun vite build",
     "pages:dev": "bun run build && wrangler pages dev dist",
     "pages:deploy": "bun run build && wrangler pages deploy dist --project-name voxel-demo",
     "test": "vitest run",

@@ -7,9 +7,7 @@ build/
 .wrangler
 
 # Ignore environment-specific files
-.env
-.env.local
-.env.*.local
+*.local
 
 # Ignore log files
 *.log
@@ -63,3 +61,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.dbg
