@@ -1,8 +1,16 @@
 import { describe, expect, test } from "vitest";
 import { generateDefaultSkyboxEquirect } from "../../src/skybox";
 
-function rowLuma(data: Uint8ClampedArray, w: number, h: number, yNorm: number): number {
-  const y = Math.max(0, Math.min(h - 1, Math.floor(yNorm * (h - 1))));
+function rowLuma(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+  yNorm: number,
+): number {
+  const y = Math.max(
+    0,
+    Math.min(h - 1, Math.floor(yNorm * (h - 1))),
+  );
   let sum = 0;
   for (let x = 0; x < w; x++) {
     const i = (y * w + x) * 4;

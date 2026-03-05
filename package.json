@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.2",
+    "@tabler/icons-solidjs": "^3.38.0",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-dialog": "^2.0.4",
     "@tauri-apps/plugin-fs": "^2.0.4",
@@ -38,6 +39,7 @@
     "flyonui": "^2.4.1",
     "gl-matrix": "^3.4.3",
     "lucide-solid": "^0.575.0",
+    "make-cli": "^6.0.2",
     "solid-js": "^1.9.11",
     "tailwindcss": "^4.2.1"
   }

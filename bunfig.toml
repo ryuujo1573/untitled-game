@@ -1,0 +1,11 @@
+[install]
+# Prefer faster lockfile format
+lockfile = true
+
+[test]
+# Enable faster test execution
+root = "tests"
+
+[run]
+# Use Bun as the default runner for scripts
+shell = "zsh"

@@ -17,10 +17,15 @@ describe("InMemorySaveStore", () => {
     const loaded = store.get(created.id);
     expect(loaded?.name).toBe("World 1");
 
-    const updated = store.update(created.id, makeSnapshot());
+    const updated = store.update(
+      created.id,
+      makeSnapshot(),
+    );
     expect(updated.id).toBe(created.id);
     expect(updated.createdAtMs).toBe(created.createdAtMs);
-    expect(updated.updatedAtMs).toBeGreaterThanOrEqual(created.updatedAtMs);
+    expect(updated.updatedAtMs).toBeGreaterThanOrEqual(
+      created.updatedAtMs,
+    );
 
     store.rename(created.id, "Renamed");
     expect(store.get(created.id)?.name).toBe("Renamed");
@@ -38,6 +43,8 @@ describe("InMemorySaveStore", () => {
     loaded.world.chunks[0].blocks[0] = 255;
 
     const loadedAgain = store.get(created.id)!;
-    expect(loadedAgain.world.chunks[0].blocks[0]).not.toBe(255);
+    expect(loadedAgain.world.chunks[0].blocks[0]).not.toBe(
+      255,
+    );
   });
 });

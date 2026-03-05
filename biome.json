@@ -11,20 +11,20 @@
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
-		"indentWidth": 2,
-		"trailingNewline": true,
-		"lineWidth": 60
+    "indentWidth": 2,
+    "trailingNewline": true,
+    "lineWidth": 60
   },
-	"css": {
-		"formatter": {
-			"enabled": true,
-			"trailingNewline": true
-		},
-		"parser": {
-			"tailwindDirectives": true,
-			"allowWrongLineComments": true
-		}
-	},
+  "css": {
+    "formatter": {
+      "enabled": true,
+      "trailingNewline": true
+    },
+    "parser": {
+      "tailwindDirectives": true,
+      "allowWrongLineComments": true
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {

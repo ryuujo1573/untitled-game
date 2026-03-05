@@ -8,12 +8,12 @@ A minimal WebGL 1.0 starter project built with **TypeScript** and **Vite**. It r
 
 ## Quick Start
 
-**Prerequisites:** [Node.js](https://nodejs.org/) (v18+) and npm.
+**Prerequisites:** [Bun](https://bun.sh/) (v1.0+) installed on your system.
 
 ```bash
-npm install      # install dependencies
-npm run dev      # start Vite dev server (opens localhost:5173)
-npm run build    # production build → dist/
+bun install      # install dependencies
+bun run dev      # start Vite dev server (opens localhost:2556)
+bun run build    # production build → dist/
 ```
 
 ## Tauri 2 Desktop Wrapper

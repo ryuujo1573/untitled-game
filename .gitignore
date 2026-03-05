@@ -13,7 +13,6 @@ build/
 # Ignore log files
 *.log
 # Ignore editor-specific files
-.vscode/
 .idea/
 
 # Ignore compiled files

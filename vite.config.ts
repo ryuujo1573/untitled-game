@@ -1,27 +1,28 @@
-import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
-import tsconfigPath from 'vite-tsconfig-paths'
+import tsconfigPath from "vite-tsconfig-paths";
 
 const host = process.env.TAURI_DEV_HOST;
-const isTauri =
-  !!(process.env.TAURI_ENV_PLATFORM ||
+const isTauri = !!(
+  process.env.TAURI_ENV_PLATFORM ||
   process.env.TAURI_ENV_DEBUG ||
   process.env.TAURI_ENV_ARCH ||
-  process.env.TAURI_ENV_FAMILY);
+  process.env.TAURI_ENV_FAMILY
+);
 
 export default defineConfig({
   clearScreen: false,
   plugins: [
     {
-      name: 'tauri-meta',
+      name: "tauri-meta",
       resolveImportMeta(property) {
-        if (property === 'isTauri') {
+        if (property === "isTauri") {
           console.log("# isTauri:", isTauri);
           return JSON.stringify(isTauri);
         }
         return null;
-      }
+      },
     },
     solidPlugin(),
     tailwindcss(),
@@ -45,7 +46,9 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
     target:
-      process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
+      process.env.TAURI_ENV_PLATFORM === "windows"
+        ? "chrome105"
+        : "safari13",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },

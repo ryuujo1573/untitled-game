@@ -12,7 +12,9 @@ describe("parseBlockProperties", () => {
 
     const parsed = parseBlockProperties(src);
 
-    expect(parsed.blocks.get("minecraft:grass_block")).toBe(1);
+    expect(parsed.blocks.get("minecraft:grass_block")).toBe(
+      1,
+    );
     expect(parsed.blocks.get("minecraft:dirt")).toBe(1);
     expect(parsed.blocks.get("minecraft:stone")).toBe(2);
     expect(parsed.warnings.length).toBe(1);

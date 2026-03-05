@@ -6,9 +6,9 @@
  * Run once:  bun scripts/gen-base-textures.ts
  */
 
-import { PNG } from "pngjs";
 import { writeFileSync } from "fs";
 import { join } from "path";
+import { PNG } from "pngjs";
 
 const T = 16;
 type RGB = [number, number, number];
@@ -37,11 +37,22 @@ const DIRT: RGB[] = [
 ];
 
 function pick5(palette: RGB[], n: number): RGB {
-  const i = n < 0.07 ? 0 : n < 0.24 ? 1 : n < 0.76 ? 2 : n < 0.93 ? 3 : 4;
+  const i =
+    n < 0.07
+      ? 0
+      : n < 0.24
+        ? 1
+        : n < 0.76
+          ? 2
+          : n < 0.93
+            ? 3
+            : 4;
   return palette[i];
 }
 
-function make(drawFn: (px: number, py: number) => RGB): PNG {
+function make(
+  drawFn: (px: number, py: number) => RGB,
+): PNG {
   const png = new PNG({ width: T, height: T });
   for (let py = 0; py < T; py++) {
     for (let px = 0; px < T; px++) {
@@ -57,7 +68,11 @@ function make(drawFn: (px: number, py: number) => RGB): PNG {
 }
 
 function save(png: PNG, name: string) {
-  const dest = join(import.meta.dir, "../src/assets/textures/block", name);
+  const dest = join(
+    import.meta.dir,
+    "../src/assets/textures/block",
+    name,
+  );
   writeFileSync(dest, PNG.sync.write(png));
   console.log("✓  " + name);
 }
@@ -73,7 +88,12 @@ save(
   make((px, py) => {
     const n = hash(px, py, 7);
     if (py <= 1) return n < 0.38 ? GRASS[1] : GRASS[2];
-    if (py <= 3) return n < 0.42 ? GRASS[0] : n < 0.66 ? DIRT[2] : DIRT[1];
+    if (py <= 3)
+      return n < 0.42
+        ? GRASS[0]
+        : n < 0.66
+          ? DIRT[2]
+          : DIRT[1];
     return pick5(DIRT, n);
   }),
   "grass_block_side.png",
@@ -87,11 +107,18 @@ save(
 
 // ── stone.png  (zone noise + crack pixels) ───────────────────────
 const stonePng = make((px, py) => {
-  const zone = hash(Math.floor(px / 4), Math.floor(py / 4), 91);
+  const zone = hash(
+    Math.floor(px / 4),
+    Math.floor(py / 4),
+    91,
+  );
   const fine = hash(px, py, 3);
   const g = Math.max(
     90,
-    Math.min(148, Math.round(100 + zone * 40 + fine * 14 - 7)),
+    Math.min(
+      148,
+      Math.round(100 + zone * 40 + fine * 14 - 7),
+    ),
   );
   return [g, g, g];
 });

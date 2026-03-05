@@ -1,4 +1,4 @@
-import { startSessionOrchestrator } from "./app/session-orchestrator";
+import { startSessionOrchestrator } from "~/logic/session/orchestrator";
 
 async function main() {
   const canvas = document.getElementById(

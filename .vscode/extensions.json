@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "tamasfe.even-better-toml",
+    "bradlc.vscode-tailwindcss",
+    "rust-lang.rust-analyzer"
+  ]
+}

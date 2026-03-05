@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { World } from "../../src/world/world";
 import { Camera } from "../../src/camera";
-import { Physics } from "../../src/physics";
-import { BlockType } from "../../src/world/block";
-import { captureFromRuntime, createGeneratedSave, hydrateRuntime } from "../../src/game/session-codec";
+import {
+  captureFromRuntime,
+  createGeneratedSave,
+  hydrateRuntime,
+} from "../../src/game/session-codec";
 import type { InputManager } from "../../src/input";
+import { Physics } from "../../src/physics";
 import Time from "../../src/time-manager";
+import { BlockType } from "../../src/world/block";
+import { World } from "../../src/world/world";
 
 describe("session codec", () => {
   it("captures and hydrates player/time", () => {
@@ -16,7 +20,10 @@ describe("session codec", () => {
     camera.setPose([5, 6, 7], 1.2, -0.4);
 
     const physics = new Physics(camera, world);
-    physics.setState({ velocity: [1, 2, 3], onGround: true });
+    physics.setState({
+      velocity: [1, 2, 3],
+      onGround: true,
+    });
 
     let selected = BlockType.Stone;
     const input = {
@@ -52,7 +59,12 @@ describe("session codec", () => {
       },
     } as unknown as InputManager;
 
-    hydrateRuntime(save, { world: world2, camera: camera2, physics: physics2, input: input2 });
+    hydrateRuntime(save, {
+      world: world2,
+      camera: camera2,
+      physics: physics2,
+      input: input2,
+    });
 
     expect(camera2.getPose().position).toEqual([5, 6, 7]);
     expect(physics2.getState().velocity).toEqual([1, 2, 3]);
