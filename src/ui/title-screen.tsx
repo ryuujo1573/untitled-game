@@ -31,12 +31,8 @@ export function mountTitleScreen(
     () => (
       <div class="fixed inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_20%_20%,#2a3748_0%,#0f1219_40%,#07090d_100%)] text-white">
         <div class="w-[min(92vw,760px)] rounded-xl border border-white/15 bg-black/35 backdrop-blur-md p-6">
-          <h1 class="text-4xl font-bold tracking-wide">
-            Voxxer
-          </h1>
-          <p class="text-white/70 mt-1">
-            Choose a world or create a new one.
-          </p>
+          <h1 class="text-4xl font-bold tracking-wide">untitled-game</h1>
+          <p class="text-white/70 mt-1">Choose a world or create a new one.</p>
 
           <div class="mt-5 rounded-lg border border-white/10 bg-black/30 max-h-72 overflow-y-auto">
             <Show
@@ -53,22 +49,13 @@ export function mountTitleScreen(
                     <button
                       class="w-full text-left px-4 py-3 hover:bg-white/8 transition-colors"
                       classList={{
-                        "bg-white/15":
-                          state().selectedSaveId ===
-                          save.id,
+                        "bg-white/15": state().selectedSaveId === save.id,
                       }}
-                      onClick={() =>
-                        handlers.onSelectSave(save.id)
-                      }
+                      onClick={() => handlers.onSelectSave(save.id)}
                     >
-                      <div class="font-semibold">
-                        {save.name}
-                      </div>
+                      <div class="font-semibold">{save.name}</div>
                       <div class="text-xs text-white/55">
-                        Updated{" "}
-                        {new Date(
-                          save.updatedAtMs,
-                        ).toLocaleString()}
+                        Updated {new Date(save.updatedAtMs).toLocaleString()}
                       </div>
                     </button>
                   )}

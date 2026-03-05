@@ -16,16 +16,15 @@
 import coalOreUrl from "~/assets/textures/block/coal_ore.png";
 import copperOreUrl from "~/assets/textures/block/copper_ore.png";
 import diamondOreUrl from "~/assets/textures/block/diamond_ore.png";
-import dirtUrl from "~/assets/textures/block/dirt.png";
+import dirtUrl from "~/assets/textures/block/dirt.png?inline";
 import emeraldOreUrl from "~/assets/textures/block/emerald_ore.png";
 import goldOreUrl from "~/assets/textures/block/gold_ore.png";
-import grassSideUrl from "~/assets/textures/block/grass_block_side.png";
-// Vite resolves these to hashed asset URLs at build time.
-import grassTopUrl from "~/assets/textures/block/grass_block_top.png";
+import grassSideUrl from "~/assets/textures/block/grass_block_side.png?inline";
+import grassTopUrl from "~/assets/textures/block/grass_block_top.png?inline";
 import ironOreUrl from "~/assets/textures/block/iron_ore.png";
 import lapisOreUrl from "~/assets/textures/block/lapis_ore.png";
 import redstoneOreUrl from "~/assets/textures/block/redstone_ore.png";
-import stoneUrl from "~/assets/textures/block/stone.png";
+import stoneUrl from "~/assets/textures/block/stone.png?inline";
 
 // Ordered by tile index 0–11.
 export const ATLAS_TILE_NAMES = [
@@ -43,8 +42,7 @@ export const ATLAS_TILE_NAMES = [
   "copper_ore",
 ] as const;
 
-export type AtlasTileName =
-  (typeof ATLAS_TILE_NAMES)[number];
+export type AtlasTileName = (typeof ATLAS_TILE_NAMES)[number];
 
 const DEFAULT_ALBEDO_URLS: Record<AtlasTileName, string> = {
   grass_block_top: grassTopUrl,
@@ -62,9 +60,7 @@ const DEFAULT_ALBEDO_URLS: Record<AtlasTileName, string> = {
 };
 
 // Kept for backwards compatibility with the legacy build path.
-const TILE_URLS = ATLAS_TILE_NAMES.map(
-  (name) => DEFAULT_ALBEDO_URLS[name],
-);
+const TILE_URLS = ATLAS_TILE_NAMES.map((name) => DEFAULT_ALBEDO_URLS[name]);
 
 export interface AtlasSourceManifest {
   albedo?: Partial<Record<AtlasTileName, string>>;
@@ -85,15 +81,12 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () =>
-      reject(new Error(`Failed to load texture: ${url}`));
+    img.onerror = () => reject(new Error(`Failed to load texture: ${url}`));
     img.src = url;
   });
 }
 
-async function loadImageSafe(
-  url: string,
-): Promise<HTMLImageElement | null> {
+async function loadImageSafe(url: string): Promise<HTMLImageElement | null> {
   try {
     return await loadImage(url);
   } catch {
@@ -129,9 +122,7 @@ function drawSolidTile(
  */
 export async function buildAtlasCanvas(): Promise<HTMLCanvasElement> {
   const { canvas, ctx } = createAtlasCanvas();
-  const images = await Promise.all(
-    TILE_URLS.map(loadImage),
-  );
+  const images = await Promise.all(TILE_URLS.map(loadImage));
   for (let i = 0; i < images.length; i++) {
     ctx.drawImage(images[i], i * T, 0, T, T);
   }
@@ -228,9 +219,7 @@ async function buildManifestChannelAtlas(
   let fallbacks = 0;
   const hasManifest = Boolean(manifest?.[channel]);
   const fallbackColor =
-    channel === "normal"
-      ? "rgb(128,128,255)"
-      : "rgb(0,25,0)";
+    channel === "normal" ? "rgb(128,128,255)" : "rgb(0,25,0)";
 
   for (let i = 0; i < ATLAS_TILE_NAMES.length; i++) {
     const name = ATLAS_TILE_NAMES[i];
@@ -287,12 +276,11 @@ export async function buildAllAtlasesFromManifest(
   specular: HTMLCanvasElement;
   stats: AtlasBuildStats;
 }> {
-  const [albedoRes, normalRes, specularRes] =
-    await Promise.all([
-      buildManifestAlbedoAtlas(manifest),
-      buildManifestChannelAtlas("normal", manifest),
-      buildManifestChannelAtlas("specular", manifest),
-    ]);
+  const [albedoRes, normalRes, specularRes] = await Promise.all([
+    buildManifestAlbedoAtlas(manifest),
+    buildManifestChannelAtlas("normal", manifest),
+    buildManifestChannelAtlas("specular", manifest),
+  ]);
 
   return {
     albedo: albedoRes.canvas,
@@ -321,34 +309,11 @@ export async function createAtlasTexture(
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    canvas,
-  );
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-  gl.texParameteri(
-    gl.TEXTURE_2D,
-    gl.TEXTURE_MIN_FILTER,
-    gl.NEAREST,
-  );
-  gl.texParameteri(
-    gl.TEXTURE_2D,
-    gl.TEXTURE_MAG_FILTER,
-    gl.NEAREST,
-  );
-  gl.texParameteri(
-    gl.TEXTURE_2D,
-    gl.TEXTURE_WRAP_S,
-    gl.CLAMP_TO_EDGE,
-  );
-  gl.texParameteri(
-    gl.TEXTURE_2D,
-    gl.TEXTURE_WRAP_T,
-    gl.CLAMP_TO_EDGE,
-  );
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   return tex;
 }

@@ -231,7 +231,7 @@ EngineRenderer(gl):
 
 ## Step 8 – Full-screen Canvas & Clean UI
 
-- Remove the decorative nav/title from `messages.ts` (or hide it).
+- Remove any decorative nav/title so the canvas is the focus.
 - Make the canvas fill the window (`width: 100vw; height: 100vh`).
 - Resize dynamically so the viewport always matches.
 - Add a simple crosshair (CSS `::after` on a centered div).

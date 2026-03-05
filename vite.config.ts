@@ -18,7 +18,6 @@ export default defineConfig({
       name: "tauri-meta",
       resolveImportMeta(property) {
         if (property === "isTauri") {
-          console.log("# isTauri:", isTauri);
           return JSON.stringify(isTauri);
         }
         return null;
@@ -46,9 +45,7 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
     target:
-      process.env.TAURI_ENV_PLATFORM === "windows"
-        ? "chrome105"
-        : "safari13",
+      process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
