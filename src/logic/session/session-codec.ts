@@ -1,10 +1,12 @@
-import { Camera } from "~/engine/rendering/camera";
-import type { GameSaveV1 } from "~/logic/session/session-types";
-import { InputManager } from "~/engine/input/input";
-import { Physics } from "~/engine/physics/physics";
+import type { InputManager } from "~/engine/input/input";
+import type { Physics } from "~/engine/physics/physics";
+import type { Camera } from "~/engine/rendering/camera";
+
 import Time from "~/environment/time/time-manager";
 import { BlockType } from "~/environment/world/block";
 import { World } from "~/environment/world/world";
+
+import type { GameSaveV1 } from "~/logic/session/session-types";
 
 interface RuntimeRefs {
   world: World;
@@ -22,10 +24,7 @@ interface SaveMeta {
 export function createGeneratedSave(
   _name: string,
   gridSize = 4,
-): Omit<
-  GameSaveV1,
-  "id" | "name" | "createdAtMs" | "updatedAtMs"
-> {
+): Omit<GameSaveV1, "id" | "name" | "createdAtMs" | "updatedAtMs"> {
   const world = new World();
   world.generate(gridSize);
 
@@ -78,10 +77,7 @@ export function captureFromRuntime(
   };
 }
 
-export function hydrateRuntime(
-  save: GameSaveV1,
-  runtime: RuntimeRefs,
-): void {
+export function hydrateRuntime(save: GameSaveV1, runtime: RuntimeRefs): void {
   runtime.camera.setPose(
     save.player.position,
     save.player.yaw,

@@ -3,10 +3,11 @@
   "vcs": {
     "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": true
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
   },
   "files": {
-    "includes": ["**", "!!**/dist"]
+    "includes": ["**", "!!src-tauri"]
   },
   "formatter": {
     "enabled": true,
@@ -40,7 +41,8 @@
     "enabled": true,
     "actions": {
       "source": {
-        "organizeImports": "on"
+        "organizeImports": "on",
+        "recommended": true
       }
     }
   }

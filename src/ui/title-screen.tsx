@@ -47,6 +47,7 @@ export function mountTitleScreen(
                 <For each={state().saves}>
                   {(save) => (
                     <button
+                      type="button"
                       class="w-full text-left px-4 py-3 hover:bg-white/8 transition-colors"
                       classList={{
                         "bg-white/15": state().selectedSaveId === save.id,
@@ -66,6 +67,7 @@ export function mountTitleScreen(
 
           <div class="mt-5 grid grid-cols-2 md:grid-cols-4 gap-2">
             <button
+              type="button"
               class="btn btn-primary"
               disabled={!state().selectedSaveId}
               onClick={handlers.onContinue}
@@ -73,12 +75,14 @@ export function mountTitleScreen(
               Continue
             </button>
             <button
+              type="button"
               class="btn btn-soft btn-secondary"
               onClick={handlers.onCreateWorld}
             >
               New World
             </button>
             <button
+              type="button"
               class="btn btn-soft btn-warning"
               disabled={!state().selectedSaveId}
               onClick={handlers.onRename}
@@ -86,6 +90,7 @@ export function mountTitleScreen(
               Rename
             </button>
             <button
+              type="button"
               class="btn btn-soft btn-error"
               disabled={!state().selectedSaveId}
               onClick={handlers.onDelete}

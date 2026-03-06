@@ -11,7 +11,7 @@ import {
   Show,
 } from "solid-js";
 import { render } from "solid-js/web";
-import { Settings } from "~/logic/settings/settings";
+
 import {
   loadPackFromLibrary,
   scanLibrary,
@@ -25,6 +25,7 @@ import {
   unloadShaderpack,
 } from "~/engine/shaderpack/runtime";
 import { extractZipToVirtualFiles } from "~/engine/shaderpack/zip";
+import { Settings } from "~/logic/settings/settings";
 
 // ── Constants ──────────────────────────────────────────────────
 const SNAP_POINTS = [
@@ -411,18 +412,21 @@ function PauseOverlay(props: { menu: PauseMenu }) {
               Paused
             </h1>
             <button
+              type="button"
               class="btn btn-primary w-full text-base"
               onClick={() => props.menu.resume()}
             >
               Resume
             </button>
             <button
+              type="button"
               class="btn btn-soft btn-secondary w-full text-base"
               onClick={() => setPanel("settings")}
             >
               Settings
             </button>
             <button
+              type="button"
               class="btn btn-soft btn-error w-full text-base"
               onClick={() => props.menu.openQuitConfirm()}
             >
@@ -442,6 +446,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
               </p>
               <div class="mt-4 grid grid-cols-3 gap-2">
                 <button
+                  type="button"
                   class="btn btn-primary btn-sm"
                   onClick={() =>
                     props.menu.submitQuitIntent("save")
@@ -450,6 +455,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                   Save
                 </button>
                 <button
+                  type="button"
                   class="btn btn-soft btn-warning btn-sm"
                   onClick={() =>
                     props.menu.submitQuitIntent("discard")
@@ -458,6 +464,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                   Discard
                 </button>
                 <button
+                  type="button"
                   class="btn btn-soft btn-secondary btn-sm"
                   onClick={() =>
                     props.menu.submitQuitIntent("cancel")
@@ -487,6 +494,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                 {/* Header */}
                 <div class="flex items-center gap-3 mb-1">
                   <button
+                    type="button"
                     class="flex items-center gap-1 text-white/50 hover:text-white/90 text-sm transition-colors duration-150 cursor-pointer"
                     onClick={() => setPanel("pause")}
                   >
@@ -575,7 +583,8 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                 </div>
 
                 {/* Shaderpack — clickable row with chevron */}
-                <div
+                <button
+                  type="button"
                   class="setting-row cursor-pointer"
                   onClick={() => setPanel("shaderpacks")}
                 >
@@ -594,9 +603,10 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                       stroke-width={2}
                     />
                   </div>
-                </div>
+                </button>
 
                 <button
+                  type="button"
                   class="btn btn-primary w-full mt-2"
                   onClick={() => setPanel("pause")}
                 >
@@ -609,6 +619,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                 {/* Header */}
                 <div class="flex items-center gap-3 mb-1">
                   <button
+                    type="button"
                     class="flex items-center gap-1 text-white/50 hover:text-white/90 text-sm transition-colors duration-150 cursor-pointer"
                     onClick={() => setPanel("settings")}
                   >
@@ -680,6 +691,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                                   when={isActive()}
                                   fallback={
                                     <button
+                                      type="button"
                                       class="btn btn-soft btn-primary btn-xs ml-2 shrink-0"
                                       onClick={() =>
                                         onLoadFromLibrary(
@@ -723,6 +735,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                 <div class="flex gap-2">
                   {import.meta.isTauri ? (
                     <button
+                      type="button"
                       class="btn btn-soft btn-secondary btn-sm flex-1"
                       onClick={onAddFolder}
                     >
@@ -731,6 +744,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                     </button>
                   ) : (
                     <button
+                      type="button"
                       class="btn btn-soft btn-secondary btn-sm flex-1"
                       onClick={onAddZip}
                     >
@@ -740,6 +754,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                   )}
                   <Show when={activePackName()}>
                     <button
+                      type="button"
                       class="btn btn-soft btn-error btn-sm"
                       onClick={onDisableShaderpack}
                     >
@@ -777,6 +792,7 @@ function PauseOverlay(props: { menu: PauseMenu }) {
                 )}
 
                 <button
+                  type="button"
                   class="btn btn-primary w-full"
                   onClick={() => setPanel("settings")}
                 >
