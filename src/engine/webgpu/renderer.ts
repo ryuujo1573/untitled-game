@@ -156,7 +156,7 @@ interface ChunkRenderData {
   vertexCount: number;
 }
 
-// ── GFrameUBO layout (336 bytes = 84 × f32) ───────────────────────────────
+// ── GFrameUBO layout (352 bytes = 88 × f32) ───────────────────────────────
 // Matches GFrameUniforms in gbuffers_terrain.wgsl and deferred_lighting.wgsl.
 // Float32 index map:
 //   [0..15]   view matrix
@@ -168,8 +168,9 @@ interface ChunkRenderData {
 //   [72..75]  ambientColor    (xyz = RGB, w = scale)
 //   [76..79]  fogColorNear    (xyz = fog RGB, w = fogNear)
 //   [80..83]  fogFar          (x = fogFar, yzw = 0)
-const GFRAME_UBO_SIZE = 336; // 84 × 4
-const GFRAME_UBO_FLOATS = 84;
+//   [84..87]  tonemap         (x = exposure, y = wantHdr, z = 0, w = 0)
+const GFRAME_UBO_SIZE = 352; // 88 × 4
+const GFRAME_UBO_FLOATS = 88;
 
 // ── OutlineUBO layout (80 bytes) ───────────────────────────────────────────
 // struct OutlineUniforms { model: mat4x4f, alpha: f32, _pad: vec3f }
@@ -185,6 +186,12 @@ const TONEMAP_UBO_FLOATS = 4;
 // struct CloudUniforms { offsetX: f32, offsetZ: f32, alpha: f32, uvScale: f32 }
 const CLOUD_UBO_SIZE = 16;
 const CLOUD_UBO_FLOATS = 4;
+
+function mapBrightnessToExposure(b: number): number {
+  const clamped = Math.max(0, Math.min(2, b));
+  const t = clamped / 2;
+  return t * t * 0.32;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1272,6 +1279,10 @@ export class WebGPURenderer implements IRenderer {
       gframeUBOData[79] = 40.0; // fogNear
       gframeUBOData[80] = 80.0; // fogFar.x
       // indices 81-83 unused (sky exposure now comes from per-vertex lightmap gbuf3)
+      gframeUBOData[84] = mapBrightnessToExposure(Settings.brightness);
+      gframeUBOData[85] = wantHdr ? 1.0 : 0.0;
+      gframeUBOData[86] = 0.0;
+      gframeUBOData[87] = 0.0;
       device.queue.writeBuffer(gframeUBO, 0, gframeUBOData);
 
       const cloudWind = Time.time * 0.75;
@@ -1487,7 +1498,7 @@ export class WebGPURenderer implements IRenderer {
 
       // ── Pass 5: Tonemap blit (HDR path only) ──────────────────────────
       if (wantHdr && tonemapBindGroup) {
-        tonemapUBOData[0] = Settings.brightness;
+        tonemapUBOData[0] = mapBrightnessToExposure(Settings.brightness);
         device.queue.writeBuffer(tonemapUBO, 0, tonemapUBOData);
 
         const tonemapPass = encoder.beginRenderPass({
