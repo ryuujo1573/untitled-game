@@ -49,7 +49,7 @@ export class World {
 
   /**
    * Get the sky light level (0-15) at world coordinates.
-   * Returns 15 for unloaded chunks or above the world (open sky).
+   * Returns 15 for above the world (open sky).
    * Returns 0 for below y=0 (bedrock).
    */
   getSkyLight(wx: number, wy: number, wz: number): number {
@@ -58,7 +58,7 @@ export class World {
     const cx = Math.floor(wx / CHUNK_SIZE);
     const cz = Math.floor(wz / CHUNK_SIZE);
     const chunk = this.getChunk(cx, cz);
-    if (!chunk) return 15;
+    if (!chunk) return 0;
     const lx = wx - cx * CHUNK_SIZE;
     const lz = wz - cz * CHUNK_SIZE;
     return chunk.getSkyLight(lx, wy, lz);

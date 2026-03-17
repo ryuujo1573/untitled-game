@@ -171,11 +171,6 @@ export class Chunk {
   cx: number;
   cz: number;
 
-  // GPU handles (assigned after upload)
-  posBuffer: WebGLBuffer | null = null;
-  uvBuffer: WebGLBuffer | null = null;
-  vertexCount = 0;
-
   constructor(cx: number, cz: number) {
     this.cx = cx;
     this.cz = cz;

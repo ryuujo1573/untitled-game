@@ -2,7 +2,7 @@ import { startSessionOrchestrator } from "~/logic/session/orchestrator";
 
 async function main() {
   const canvas = document.getElementById(
-    "webglCanvas",
+    "gameCanvas",
   ) as HTMLCanvasElement | null;
   if (!canvas) {
     document.body.textContent = "⚠️ Canvas element not found.";

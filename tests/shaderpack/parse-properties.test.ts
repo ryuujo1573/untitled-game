@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseShadersProperties } from "../../src/shaderpack/parse-properties";
+import { parseShadersProperties } from "../../src/engine/shaderpack/parse-properties";
 
 describe("parseShadersProperties", () => {
   test("parses alpha/blend/flip/options/custom uniforms and cloud mode", () => {

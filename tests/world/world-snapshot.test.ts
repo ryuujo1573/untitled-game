@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BlockType } from "../../src/world/block";
-import { World } from "../../src/world/world";
+import { BlockType } from "../../src/environment/world/block";
+import { World } from "../../src/environment/world/world";
 
 describe("World snapshots", () => {
   it("roundtrips chunk data", () => {

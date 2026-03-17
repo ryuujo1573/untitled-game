@@ -16,8 +16,7 @@
   }
 }
 
-/* ── WebGL canvas ───────────────────────────────────────────── */
-#webglCanvas {
+#gameCanvas {
   @apply block w-screen h-screen;
 }
 

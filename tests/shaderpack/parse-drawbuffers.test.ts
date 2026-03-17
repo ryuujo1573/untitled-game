@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseDrawTargetsFromShaderSource } from "../../src/shaderpack/parse-drawbuffers";
+import { parseDrawTargetsFromShaderSource } from "../../src/engine/shaderpack/parse-drawbuffers";
 
 describe("parseDrawTargetsFromShaderSource", () => {
   test("parses DRAWBUFFERS and RENDERTARGETS directives", () => {

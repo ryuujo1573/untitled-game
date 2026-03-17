@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { Camera } from "../../src/camera";
+import { Camera } from "../../src/engine/rendering/camera";
 import {
   captureFromRuntime,
   createGeneratedSave,
   hydrateRuntime,
-} from "../../src/game/session-codec";
-import type { InputManager } from "../../src/input";
-import { Physics } from "../../src/physics";
-import Time from "../../src/time-manager";
-import { BlockType } from "../../src/world/block";
-import { World } from "../../src/world/world";
+} from "../../src/logic/session/session-codec";
+import type { InputManager } from "../../src/engine/input/input";
+import { Physics } from "../../src/engine/physics/physics";
+import Time from "../../src/environment/time/time-manager";
+import { BlockType } from "../../src/environment/world/block";
+import { World } from "../../src/environment/world/world";
 
 describe("session codec", () => {
   it("captures and hydrates player/time", () => {

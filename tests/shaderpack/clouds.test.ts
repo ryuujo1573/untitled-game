@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildCloudMesh } from "../../src/clouds";
+import { buildCloudMesh } from "../../src/engine/rendering/clouds";
 
 describe("buildCloudMesh", () => {
   test("generates deterministic minecraft-style cloud quads", () => {

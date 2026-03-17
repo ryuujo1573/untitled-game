@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && git_hash=$(git rev-parse --short HEAD) bun x --bun vite build",
     "pages:dev": "bun run build && wrangler pages dev dist",
-    "pages:deploy": "bun run build && wrangler pages deploy dist --project-name voxel-demo",
+    "pages:deploy": "bun run build && wrangler pages deploy dist",
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",

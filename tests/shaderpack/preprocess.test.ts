@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { preprocessShader } from "../../src/shaderpack/preprocess";
+import { preprocessShader } from "../../src/engine/shaderpack/preprocess";
 
 describe("preprocessShader", () => {
   test("keeps #version first, injects macros, resolves includes", () => {

@@ -1,17 +1,13 @@
-import { initializeCanvas } from "~/engine/rendering/canvas";
 import { InMemorySaveStore } from "~/logic/session/in-memory-save-store";
 import { createGeneratedSave } from "~/logic/session/session-codec";
 import type { GameSaveV1 } from "~/logic/session/session-types";
 import type { QuitToTitleIntent } from "~/ui/pause-menu";
-import { WebGLRenderer } from "~/engine/rendering/renderer";
 import type { IRenderer } from "~/engine/rendering/renderer-interface";
 import {
   mountTitleScreen,
   type TitleScreenController,
 } from "~/ui/title-screen";
 import { WebGPURenderer } from "~/engine/webgpu/renderer";
-
-type BackendKind = "webgpu" | "webgl";
 
 function stripManagedFields(
   save: GameSaveV1,
@@ -37,7 +33,6 @@ export class SessionOrchestrator {
   private title: TitleScreenController | null = null;
   private selectedSaveId: string | null = null;
   private activeRenderer: IRenderer | null = null;
-  private backend: BackendKind | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -185,43 +180,11 @@ export class SessionOrchestrator {
       onQuitRequested: (intent: QuitToTitleIntent) => void;
     },
   ): Promise<IRenderer> {
-    if (this.backend === "webgpu") {
-      const renderer = new WebGPURenderer(this.canvas);
-      await renderer.startSession(save, hooks);
-      return renderer;
+    if (typeof navigator === "undefined" || !navigator.gpu) {
+      throw new Error("WebGPU is not available in this environment");
     }
-
-    if (this.backend === "webgl") {
-      const gl = initializeCanvas("webglCanvas");
-      if (!gl) throw new Error("WebGL2 is not supported");
-      const renderer = new WebGLRenderer(gl);
-      await renderer.startSession(save, hooks);
-      return renderer;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.gpu) {
-      const renderer = new WebGPURenderer(this.canvas);
-      try {
-        await renderer.startSession(save, hooks);
-        this.backend = "webgpu";
-        return renderer;
-      } catch (err) {
-        renderer.destroy();
-        console.warn(
-          "WebGPU failed, falling back to WebGL2:",
-          err,
-        );
-      }
-    }
-
-    const gl = initializeCanvas("webglCanvas");
-    if (!gl)
-      throw new Error(
-        "Neither WebGPU nor WebGL2 is available",
-      );
-    const renderer = new WebGLRenderer(gl);
+    const renderer = new WebGPURenderer(this.canvas);
     await renderer.startSession(save, hooks);
-    this.backend = "webgl";
     return renderer;
   }
 

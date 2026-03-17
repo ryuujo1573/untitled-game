@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseBlockProperties } from "../../src/shaderpack/parse-block-properties";
+import { parseBlockProperties } from "../../src/engine/shaderpack/parse-block-properties";
 
 describe("parseBlockProperties", () => {
   test("parses block id mapping and ignores malformed rows", () => {

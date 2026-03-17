@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildManifestFromVirtualFiles } from "../../src/shaderpack/loader";
+import { buildManifestFromVirtualFiles } from "../../src/engine/shaderpack/loader";
 
 describe("buildManifestFromVirtualFiles", () => {
   test("discovers programs and includes", () => {

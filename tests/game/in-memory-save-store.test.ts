@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { InMemorySaveStore } from "../../src/game/in-memory-save-store";
-import { createGeneratedSave } from "../../src/game/session-codec";
+import { InMemorySaveStore } from "../../src/logic/session/in-memory-save-store";
+import { createGeneratedSave } from "../../src/logic/session/session-codec";
 
 function makeSnapshot() {
   return createGeneratedSave("tmp", 2);

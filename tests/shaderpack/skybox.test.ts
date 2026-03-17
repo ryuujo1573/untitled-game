@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { generateDefaultSkyboxEquirect } from "../../src/skybox";
+import { generateDefaultSkyboxEquirect } from "../../src/engine/rendering/skybox";
 
 function rowLuma(
   data: Uint8ClampedArray,
