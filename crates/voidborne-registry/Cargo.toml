@@ -1,0 +1,16 @@
+[package]
+name = "voidborne-registry"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+ahash = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+voidborne-util = { path = "../voidborne-util" }

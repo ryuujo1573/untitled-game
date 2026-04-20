@@ -1,9 +1,0 @@
-[install]
-minimumReleaseAge = 1209600 # 2 weeks
-
-[install.lockfile]
-save = true
-
-[test]
-# Enable faster test execution
-root = "tests"

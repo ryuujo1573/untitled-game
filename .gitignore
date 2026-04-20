@@ -36,7 +36,7 @@ gen/
 # Ignore Thumbs.db files on Windows
 Thumbs.db
 
-# Extra git ignores that were in the subfolder of voxxer
+# Extra git ignores that were in the subfolder of voidborne
 # Logs
 logs
 *.log

@@ -1,0 +1,19 @@
+[package]
+name = "voidborne-world"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+glam = { workspace = true }
+voidborne-math = { path = "../voidborne-math" }
+voidborne-util = { path = "../voidborne-util" }
+voidborne-registry = { path = "../voidborne-registry" }
+ahash = { workspace = true }
+serde = { workspace = true }
+smallvec = { workspace = true }
