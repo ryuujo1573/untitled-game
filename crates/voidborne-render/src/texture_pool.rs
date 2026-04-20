@@ -44,6 +44,9 @@ pub struct ShadowCascadeViews {
 pub struct TexturePool {
     entries: Vec<PooledTexture>,
     pub shadow_views: Option<ShadowCascadeViews>,
+    /// Depth-only view of the DEPTH target (no stencil aspect).
+    /// Required for sampling in bind groups when the format is `Depth24PlusStencil8`.
+    pub depth_only_view: Option<wgpu::TextureView>,
 }
 
 impl TexturePool {
@@ -51,6 +54,7 @@ impl TexturePool {
         Self {
             entries: Vec::new(),
             shadow_views: None,
+            depth_only_view: None,
         }
     }
 
@@ -58,6 +62,7 @@ impl TexturePool {
     pub fn rebuild(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         self.entries.clear();
         self.shadow_views = None;
+        self.depth_only_view = None;
 
         let w = width;
         let h = height;
@@ -67,12 +72,12 @@ impl TexturePool {
         let depth_usage =
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
 
-        let mut push = |label: &'static str,
-                        format: wgpu::TextureFormat,
-                        usage: wgpu::TextureUsages,
-                        tw: u32,
-                        th: u32,
-                        layers: u32| {
+        let push = |label: &'static str,
+                    format: wgpu::TextureFormat,
+                    usage: wgpu::TextureUsages,
+                    tw: u32,
+                    th: u32,
+                    layers: u32| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
                 size: wgpu::Extent3d {
@@ -135,14 +140,37 @@ impl TexturePool {
             1,
         ));
         // 4: DEPTH  — Depth24PlusStencil8
-        self.entries.push(push(
-            "depth",
-            wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_usage,
-            w,
-            h,
-            1,
-        ));
+        {
+            let tex = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("depth"),
+                size: wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                usage: depth_usage,
+                view_formats: &[],
+            });
+            // Default view includes both aspects (used as render attachment).
+            let view = tex.create_view(&Default::default());
+            // Depth-only view required when sampling from a bind group.
+            let depth_view = tex.create_view(&wgpu::TextureViewDescriptor {
+                aspect: wgpu::TextureAspect::DepthOnly,
+                ..Default::default()
+            });
+            self.depth_only_view = Some(depth_view);
+            self.entries.push(PooledTexture {
+                texture: tex,
+                view,
+                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                width: w,
+                height: h,
+            });
+        }
 
         // 5: SHADOW_CSM — Depth32Float array (4 cascades × 4096²)
         {

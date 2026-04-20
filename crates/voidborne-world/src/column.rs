@@ -4,7 +4,7 @@
 //! Sections are stored in a fixed-size array ordered bottom to top;
 //! section 0 corresponds to the section whose base is at `MIN_Y`.
 
-use voidborne_math::{BlockPos, ChunkPos, LocalPos, SECTION_SIZE};
+use voidborne_math::{ChunkPos, SECTION_SIZE};
 
 use crate::block::BlockState;
 use crate::section::Section;

@@ -1,0 +1,594 @@
+warning: unused imports: `BlockPos` and `LocalPos`
+ --> crates\voidborne-world\src\column.rs:7:22
+  |
+7 | use voidborne_math::{BlockPos, ChunkPos, LocalPos, SECTION_SIZE};
+  |                      ^^^^^^^^            ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ahash::AHashMap`
+  --> crates\voidborne-world\src\light.rs:19:5
+   |
+19 | use ahash::AHashMap;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `block_registry`
+ --> crates\voidborne-world\src\world.rs:7:20
+  |
+7 | use crate::block::{block_registry, BlockState};
+  |                    ^^^^^^^^^^^^^^
+
+warning: unused import: `LoadedColumn`
+  --> crates\voidborne-world\src\worldgen.rs:15:20
+   |
+15 | use crate::world::{LoadedColumn, World};
+   |                    ^^^^^^^^^^^^
+
+warning: unused import: `MAX_Y`
+  --> crates\voidborne-world\src\worldgen.rs:16:13
+   |
+16 | use crate::{MAX_Y, MIN_Y};
+   |             ^^^^^
+
+warning: unused variable: `air_id`
+  --> crates\voidborne-world\src\block.rs:87:13
+   |
+87 |         let air_id = reg
+   |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_air_id`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `grass`
+   --> crates\voidborne-world\src\block.rs:113:13
+    |
+113 |         let grass = solid!("voidborne:grass_block", "Grass Block",
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_grass`
+
+warning: unused variable: `dirt`
+   --> crates\voidborne-world\src\block.rs:115:13
+    |
+115 |         let dirt = solid!("voidborne:dirt", "Dirt", [2; 6]);
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_dirt`
+
+warning: unused variable: `stone`
+   --> crates\voidborne-world\src\block.rs:116:13
+    |
+116 |         let stone = solid!("voidborne:stone", "Stone", [3; 6]);
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_stone`
+
+warning: `voidborne-world` (lib) generated 9 warnings (run `cargo fix --lib -p voidborne-world` to apply 9 suggestions)
+   Compiling voidborne-render v0.1.0 (C:\Users\ryuujo1573\repo\roughly-a-3d-game\crates\voidborne-render)
+warning: unused import: `std::sync::Arc`
+ --> crates\voidborne-render\src\graph.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::frame_data::ChunkOriginUBO`
+ --> crates\voidborne-render\src\passes\gbuffer.rs:7:5
+  |
+7 | use crate::frame_data::ChunkOriginUBO;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `bytemuck`
+ --> crates\voidborne-render\src\passes\lighting.rs:6:5
+  |
+6 | use bytemuck;
+  |     ^^^^^^^^
+
+warning: unused import: `wgpu::util::DeviceExt`
+ --> crates\voidborne-render\src\passes\lighting.rs:8:5
+  |
+8 | use wgpu::util::DeviceExt;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::frame_data::CascadeUBO`
+ --> crates\voidborne-render\src\passes\lighting.rs:9:5
+  |
+9 | use crate::frame_data::CascadeUBO;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::frame_data::CascadeUBO`
+  --> crates\voidborne-render\src\passes\shadow.rs:10:5
+   |
+10 | use crate::frame_data::CascadeUBO;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::texture_pool::TexturePool`
+  --> crates\voidborne-render\src\passes\shadow.rs:12:5
+   |
+12 | use crate::texture_pool::TexturePool;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `surface_format`
+  --> crates\voidborne-render\src\passes\lighting.rs:31:9
+   |
+31 |         surface_format: wgpu::TextureFormat,
+   |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_surface_format`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `cascade_ubo`
+   --> crates\voidborne-render\src\renderer.rs:170:13
+    |
+170 |         let cascade_ubo = CascadeUBO {
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cascade_ubo`
+
+warning: variable does not need to be mutable
+  --> crates\voidborne-render\src\texture_pool.rs:75:13
+   |
+75 |         let mut push = |label: &'static str,
+   |             ----^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `frame_bgl` is never read
+  --> crates\voidborne-render\src\renderer.rs:95:5
+   |
+87 | pub struct VoidborneRenderer {
+   |            ----------------- field in this struct
+...
+95 |     frame_bgl: wgpu::BindGroupLayout,
+   |     ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `voidborne-render` (lib) generated 11 warnings (run `cargo fix --lib -p voidborne-render` to apply 10 suggestions)
+   Compiling voidborne v0.1.0 (C:\Users\ryuujo1573\repo\roughly-a-3d-game\game)
+warning: unused import: `Chunk`
+   --> game\src\session\codec.rs:137:9
+    |
+137 |         Chunk, ChunkSnapshot,
+    |         ^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `is_opaque`
+ --> game\src\world\chunk.rs:1:45
+  |
+1 | use crate::world::block::{block_face_tiles, is_opaque, BlockType};
+  |                                             ^^^^^^^^^
+
+warning: unused import: `Duration`
+ --> game\src\main.rs:8:17
+  |
+8 | use std::time::{Duration, Instant};
+  |                 ^^^^^^^^
+
+warning: use of deprecated associated function `egui::Frame::none`: Use `Frame::NONE` or `Frame::new()` instead.
+   --> game\src\app.rs:762:26
+    |
+762 |             egui::Frame::none()
+    |                          ^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `egui::Frame::rounding`: Renamed to `corner_radius`
+   --> game\src\app.rs:765:18
+    |
+765 |                 .rounding(egui::CornerRadius::same(4))
+    |                  ^^^^^^^^
+
+warning: use of deprecated associated function `egui::Frame::none`: Use `Frame::NONE` or `Frame::new()` instead.
+   --> game\src\app.rs:802:29
+    |
+802 |     let card = egui::Frame::none()
+    |                             ^^^^
+
+warning: use of deprecated method `egui::Frame::rounding`: Renamed to `corner_radius`
+   --> game\src\app.rs:804:10
+    |
+804 |         .rounding(egui::CornerRadius::same(10))
+    |          ^^^^^^^^
+
+warning: use of deprecated associated function `egui::Frame::none`: Use `Frame::NONE` or `Frame::new()` instead.
+    --> game\src\app.rs:1020:34
+     |
+1020 |                     egui::Frame::none()
+     |                                  ^^^^
+
+warning: use of deprecated method `egui::Frame::rounding`: Renamed to `corner_radius`
+    --> game\src\app.rs:1022:26
+     |
+1022 |                         .rounding(egui::CornerRadius::same(10))
+     |                          ^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> game\src\app.rs:876:29
+    |
+876 |                         let mut pct = (*brightness * 100.0).round() as i32;
+    |                             ----^^^
+    |                             |
+    |                             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> game\src\app.rs:957:33
+    |
+957 | ...                   let mut pct = (video.motion_blur_intensity * 100.0).round() as i32;
+    |                           ----^^^
+    |                           |
+    |                           help: remove this `mut`
+
+warning: value assigned to `nx` is never read
+  --> game\src\engine\raycaster.rs:66:18
+   |
+66 |     let mut nx = 0i32;
+   |                  ^^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `ny` is never read
+  --> game\src\engine\raycaster.rs:67:18
+   |
+67 |     let mut ny = 0i32;
+   |                  ^^^^
+   |
+   = help: maybe it is overwritten before being read?
+
+warning: value assigned to `nz` is never read
+  --> game\src\engine\raycaster.rs:68:18
+   |
+68 |     let mut nz = 0i32;
+   |                  ^^^^
+   |
+   = help: maybe it is overwritten before being read?
+
+warning: method `label` is never used
+   --> game\src\app.rs:105:12
+    |
+104 | impl VsyncMode {
+    | -------------- method in this implementation
+105 |     pub fn label(self) -> &'static str {
+    |            ^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `get_pose` and `set_pose` are never used
+  --> game\src\engine\camera.rs:75:12
+   |
+13 | impl Camera {
+   | ----------- methods in this implementation
+...
+75 |     pub fn get_pose(&self) -> CameraPose {
+   |            ^^^^^^^^
+...
+83 |     pub fn set_pose(&mut self, pose: &CameraPose) {
+   |            ^^^^^^^^
+
+warning: struct `CameraPose` is never constructed
+  --> game\src\engine\camera.rs:90:12
+   |
+90 | pub struct CameraPose {
+   |            ^^^^^^^^^^
+
+warning: fields `forward`, `backward`, `strafe_left`, and `strafe_right` are never read
+   --> game\src\engine\input.rs:155:9
+    |
+154 | pub struct ActionState {
+    |            ----------- fields in this struct
+155 |     pub forward: bool,
+    |         ^^^^^^^
+156 |     pub backward: bool,
+    |         ^^^^^^^^
+157 |     pub strafe_left: bool,
+    |         ^^^^^^^^^^^
+158 |     pub strafe_right: bool,
+    |         ^^^^^^^^^^^^
+    |
+    = note: `ActionState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: methods `get_state` and `set_state` are never used
+   --> game\src\engine\physics.rs:142:12
+    |
+ 22 | impl Physics {
+    | ------------ methods in this implementation
+...
+142 |     pub fn get_state(&self) -> PhysicsState {
+    |            ^^^^^^^^^
+...
+149 |     pub fn set_state(&mut self, state: &PhysicsState, camera: &Camera) {
+    |            ^^^^^^^^^
+
+warning: struct `PhysicsState` is never constructed
+   --> game\src\engine\physics.rs:160:12
+    |
+160 | pub struct PhysicsState {
+    |            ^^^^^^^^^^^^
+
+warning: struct `ChunkGPU` is never constructed
+  --> game\src\renderer\gpu.rs:30:12
+   |
+30 | pub struct ChunkGPU {
+   |            ^^^^^^^^
+
+warning: struct `GpuContext` is never constructed
+  --> game\src\renderer\gpu.rs:42:12
+   |
+42 | pub struct GpuContext {
+   |            ^^^^^^^^^^
+
+warning: constant `LUT_SIZE` is never used
+  --> game\src\renderer\gpu.rs:92:7
+   |
+92 | const LUT_SIZE: usize = 32;
+   |       ^^^^^^^^
+
+warning: function `generate_lut` is never used
+  --> game\src\renderer\gpu.rs:94:4
+   |
+94 | fn generate_lut() -> Vec<u8> {
+   |    ^^^^^^^^^^^^
+
+warning: function `lut_grade` is never used
+   --> game\src\renderer\gpu.rs:115:4
+    |
+115 | fn lut_grade(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    |    ^^^^^^^^^
+
+warning: function `rgb_to_hsl` is never used
+   --> game\src\renderer\gpu.rs:140:4
+    |
+140 | fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    |    ^^^^^^^^^^
+
+warning: function `hsl_to_rgb` is never used
+   --> game\src\renderer\gpu.rs:167:4
+    |
+167 | fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
+    |    ^^^^^^^^^^
+
+warning: function `hue_to_rgb` is never used
+   --> game\src\renderer\gpu.rs:185:4
+    |
+185 | fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
+    |    ^^^^^^^^^^
+
+warning: function `load_sky_png` is never used
+   --> game\src\renderer\gpu.rs:206:4
+    |
+206 | fn load_sky_png(path: &str) -> (Vec<u8>, u32, u32) {
+    |    ^^^^^^^^^^^^
+
+warning: function `fallback_sky` is never used
+   --> game\src\renderer\gpu.rs:234:4
+    |
+234 | fn fallback_sky() -> (Vec<u8>, u32, u32) {
+    |    ^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+    --> game\src\renderer\gpu.rs:249:12
+     |
+ 246 | impl GpuContext {
+     | --------------- associated items in this implementation
+...
+ 249 |     pub fn from_window(window: Arc<Window>) -> Self {
+     |            ^^^^^^^^^^^
+...
+ 253 |     async fn init(window: Arc<Window>) -> Self {
+     |              ^^^^
+...
+ 892 |     fn create_depth_view(
+     |        ^^^^^^^^^^^^^^^^^
+...
+ 913 |     fn create_scene_tex(
+     |        ^^^^^^^^^^^^^^^^
+...
+ 935 |     fn create_lut_bg(
+     |        ^^^^^^^^^^^^^
+...
+ 962 |     pub fn resize(&mut self, w: u32, h: u32) {
+     |            ^^^^^^
+...
+ 985 |     pub fn set_present_mode(&mut self, mode: wgpu::PresentMode) {
+     |            ^^^^^^^^^^^^^^^^
+...
+ 992 |     pub fn apply_egui_textures(&mut self, delta: &egui::TexturesDelta) {
+     |            ^^^^^^^^^^^^^^^^^^^
+...
+1004 |     pub fn load_chunk(&mut self, data: ChunkMeshData) {
+     |            ^^^^^^^^^^
+...
+1081 |     pub fn unload_chunk(&mut self, cx: i32, cz: i32) {
+     |            ^^^^^^^^^^^^
+...
+1087 |     pub fn render(
+     |            ^^^^^^
+
+warning: function `mat4_mul_col` is never used
+    --> game\src\renderer\gpu.rs:1267:4
+     |
+1267 | fn mat4_mul_col(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
+     |    ^^^^^^^^^^^^
+
+warning: function `build_outline_verts` is never used
+    --> game\src\renderer\gpu.rs:1285:4
+     |
+1285 | fn build_outline_verts(
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: variant `UnloadChunk` is never constructed
+  --> game\src\renderer\render_loop.rs:17:5
+   |
+15 | pub enum RenderCommand {
+   |          ------------- variant in this enum
+16 |     LoadChunk(ChunkMeshData),
+17 |     UnloadChunk {
+   |     ^^^^^^^^^^^
+
+warning: field `time` is never read
+  --> game\src\renderer\types.rs:14:9
+   |
+11 | pub struct FrameState {
+   |            ---------- field in this struct
+...
+14 |     pub time: f32,
+   |         ^^^^
+
+warning: function `now_ms` is never used
+  --> game\src\session\codec.rs:15:4
+   |
+15 | fn now_ms() -> u64 {
+   |    ^^^^^^
+
+warning: function `create_generated_save` is never used
+  --> game\src\session\codec.rs:23:8
+   |
+23 | pub fn create_generated_save(
+   |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `capture_save` is never used
+  --> game\src\session\codec.rs:55:8
+   |
+55 | pub fn capture_save(
+   |        ^^^^^^^^^^^^
+
+warning: function `hydrate_save` is never used
+  --> game\src\session\codec.rs:91:8
+   |
+91 | pub fn hydrate_save(
+   |        ^^^^^^^^^^^^
+
+warning: function `world_to_snapshot` is never used
+   --> game\src\session\codec.rs:115:4
+    |
+115 | fn world_to_snapshot(world: &World) -> WorldSnapshotV1 {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: function `world_from_snapshot` is never used
+   --> game\src\session\codec.rs:133:4
+    |
+133 | fn world_from_snapshot(
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ChunkSnapshotV1` is never constructed
+ --> game\src\session\types.rs:4:12
+  |
+4 | pub struct ChunkSnapshotV1 {
+  |            ^^^^^^^^^^^^^^^
+
+warning: enum `GeneratorKind` is never used
+  --> game\src\session\types.rs:13:10
+   |
+13 | pub enum GeneratorKind {
+   |          ^^^^^^^^^^^^^
+
+warning: struct `WorldSnapshotV1` is never constructed
+  --> game\src\session\types.rs:19:12
+   |
+19 | pub struct WorldSnapshotV1 {
+   |            ^^^^^^^^^^^^^^^
+
+warning: struct `PlayerSnapshotV1` is never constructed
+  --> game\src\session\types.rs:25:12
+   |
+25 | pub struct PlayerSnapshotV1 {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: struct `EnvironmentSnapshotV1` is never constructed
+  --> game\src\session\types.rs:35:12
+   |
+35 | pub struct EnvironmentSnapshotV1 {
+   |            ^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `EntitySnapshotV1` is never constructed
+  --> game\src\session\types.rs:40:12
+   |
+40 | pub struct EntitySnapshotV1 {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: struct `GameSaveV1` is never constructed
+  --> game\src\session\types.rs:47:12
+   |
+47 | pub struct GameSaveV1 {
+   |            ^^^^^^^^^^
+
+warning: struct `SaveMeta` is never constructed
+  --> game\src\session\types.rs:61:12
+   |
+61 | pub struct SaveMeta {
+   |            ^^^^^^^^
+
+warning: struct `SaveSummary` is never constructed
+  --> game\src\session\types.rs:67:12
+   |
+67 | pub struct SaveSummary {
+   |            ^^^^^^^^^^^
+
+warning: function `infer_grid_size` is never used
+  --> game\src\world\mod.rs:28:4
+   |
+28 | fn infer_grid_size(chunks: &HashMap<(i32, i32), Chunk>) -> i32 {
+   |    ^^^^^^^^^^^^^^^
+
+warning: associated items `get_chunk_mut`, `to_snapshot`, and `from_snapshot` are never used
+   --> game\src\world\mod.rs:51:12
+    |
+ 39 | impl World {
+    | ---------- associated items in this implementation
+...
+ 51 |     pub fn get_chunk_mut(&mut self, cx: i32, cz: i32) -> Option<&mut Chunk> {
+    |            ^^^^^^^^^^^^^
+...
+187 |     pub fn to_snapshot(&self) -> WorldSnapshot {
+    |            ^^^^^^^^^^^
+...
+194 |     pub fn from_snapshot(s: WorldSnapshot) -> Self {
+    |            ^^^^^^^^^^^^^
+
+warning: struct `WorldSnapshot` is never constructed
+   --> game\src\world\mod.rs:217:12
+    |
+217 | pub struct WorldSnapshot {
+    |            ^^^^^^^^^^^^^
+
+warning: field `tangents` is never read
+   --> game\src\world\chunk.rs:100:9
+    |
+ 94 | pub struct ChunkMesh {
+    |            --------- field in this struct
+...
+100 |     pub tangents: Vec<f32>,
+    |         ^^^^^^^^
+
+warning: struct `ChunkSnapshot` is never constructed
+   --> game\src\world\chunk.rs:106:12
+    |
+106 | pub struct ChunkSnapshot {
+    |            ^^^^^^^^^^^^^
+
+warning: associated items `to_snapshot` and `from_snapshot` are never used
+   --> game\src\world\chunk.rs:171:12
+    |
+132 | impl Chunk {
+    | ---------- associated items in this implementation
+...
+171 |     pub fn to_snapshot(&self) -> ChunkSnapshot {
+    |            ^^^^^^^^^^^
+...
+179 |     pub fn from_snapshot(s: ChunkSnapshot) -> Self {
+    |            ^^^^^^^^^^^^^
+
+warning: `voidborne` (bin "voidborne") generated 56 warnings (run `cargo fix --bin "voidborne" -p voidborne` to apply 5 suggestions)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 7.25s
+     Running `target\debug\voidborne.exe`
+[2026-04-20T22:23:06Z ERROR wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	loader_get_json: Failed to open JSON file C:\Program Files\Rockstar Games\Social Club\SocialClubVulkanLayer.json
+[2026-04-20T22:23:06Z ERROR wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x1a8be10bfb0, name: ?)
+[2026-04-20T22:24:10Z ERROR wgpu::backend::wgpu_core] Handling wgpu errors as fatal by default
+
+thread '<unnamed>' (57484) panicked at C:\Users\ryuujo1573\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wgpu-24.0.5\src\backend\wgpu_core.rs:1423:26:
+wgpu error: Validation Error
+
+Caused by:
+  In Device::create_texture, label = 'gbuf_albedo'
+    Dimension X is zero
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

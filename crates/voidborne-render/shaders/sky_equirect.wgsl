@@ -79,15 +79,12 @@ fn fs_main(in: FsIn) -> @location(0) vec4<f32> {
     ));
 
     // Rotate from camera space to world space.
-    // view is a world→camera matrix; its transpose gives cam→world.
-    // For column-major mat4: view[col][row].
-    // world = V^T * cam_dir  (rotation part only, no translation).
+    // view is world→camera; cam→world is V^T.
+    // In WGSL (column-major), `cam_dir * rot` (row-vec × matrix)
+    // equals V^T × cam_dir, which is what we want.
     let v = frame.view;
-    let world_dir = normalize(vec3<f32>(
-        v[0][0] * cam_dir.x + v[1][0] * cam_dir.y + v[2][0] * cam_dir.z,
-        v[0][1] * cam_dir.x + v[1][1] * cam_dir.y + v[2][1] * cam_dir.z,
-        v[0][2] * cam_dir.x + v[1][2] * cam_dir.y + v[2][2] * cam_dir.z,
-    ));
+    let rot = mat3x3<f32>(v[0].xyz, v[1].xyz, v[2].xyz);
+    let world_dir = normalize(cam_dir * rot);
 
     // ── Equirectangular mapping ────────────────────────
     //

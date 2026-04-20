@@ -16,8 +16,6 @@
 //! - The sky column pass uses the per-column heightmap to start the
 //!   BFS only at the first transparent position below the sky top.
 
-use ahash::AHashMap;
-
 use voidborne_math::ChunkPos;
 
 use crate::{MAX_Y, MIN_Y, World};

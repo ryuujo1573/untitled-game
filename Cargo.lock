@@ -3049,6 +3049,9 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+ "voidborne-math",
+ "voidborne-render",
+ "voidborne-world",
  "wgpu",
  "winit",
 ]
@@ -3084,6 +3087,8 @@ name = "voidborne-render"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "egui",
+ "egui-wgpu",
  "glam",
  "image",
  "pollster",

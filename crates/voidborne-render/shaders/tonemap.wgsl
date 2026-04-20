@@ -23,6 +23,9 @@ struct PostUBO {
 @group(0) @binding(1) var history_tex : texture_2d<f32>;
 @group(0) @binding(2) var motion_tex  : texture_2d<f32>;
 @group(0) @binding(3) var tex_sampler : sampler;
+// Optional 3-D colour-grading LUT (32×32×32 Rgba8Unorm).
+// Bound at group 0 binding 4.  Pass a neutral (identity) LUT to disable.
+@group(0) @binding(4) var lut_tex     : texture_3d<f32>;
 @group(1) @binding(0) var<uniform> post : PostUBO;
 
 // ── Full-screen triangle ───────────────────────────────
@@ -88,6 +91,19 @@ fn taa_resolve(uv: vec2<f32>, hdr: vec3<f32>) -> vec3<f32> {
     return mix(hdr, clipped, post.taa_blend);
 }
 
+// ── Colour-grading LUT lookup ──────────────────────────
+//
+// Scale + offset so trilinear filtering interpolates at texel centres
+// of the 32³ LUT.
+const LUT_N      : f32 = 32.0;
+const LUT_SCALE  : f32 = 31.0 / 32.0;   // (N-1)/N
+const LUT_OFFSET : f32 =  0.5 / 32.0;   //  0.5/N
+
+fn apply_lut(color: vec3<f32>) -> vec3<f32> {
+    let coord = color * LUT_SCALE + LUT_OFFSET;
+    return textureSample(lut_tex, tex_sampler, coord).rgb;
+}
+
 // ── Fragment ───────────────────────────────────────────
 
 @fragment
@@ -100,8 +116,11 @@ fn fs_main(in: FsIn) -> @location(0) vec4<f32> {
     // Temporal anti-aliasing.
     let taa = taa_resolve(in.uv, hdr);
 
-    // ACES tonemap → sRGB output (sRGB format handles gamma).
+    // ACES tonemap → [0,1].
     let ldr = aces(taa);
 
-    return vec4<f32>(ldr, 1.0);
+    // Colour-grading LUT (identity LUT = pass-through).
+    let graded = apply_lut(ldr);
+
+    return vec4<f32>(graded, 1.0);
 }

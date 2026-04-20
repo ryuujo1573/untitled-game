@@ -84,7 +84,7 @@ impl BlockRegistry {
         let mut tags = TagMap::new("block");
 
         // Reserve index 0 for Air unconditionally.
-        let air_id = reg
+        let _air_id = reg
             .register(
                 "voidborne:air".parse().unwrap(),
                 BlockProperties {
@@ -110,10 +110,10 @@ impl BlockRegistry {
             }};
         }
 
-        let grass = solid!("voidborne:grass_block", "Grass Block",
+        let _grass = solid!("voidborne:grass_block", "Grass Block",
             [0, 2, 1, 1, 1, 1]);  // top=grass, bottom=dirt, sides=grass_side
-        let dirt = solid!("voidborne:dirt", "Dirt", [2; 6]);
-        let stone = solid!("voidborne:stone", "Stone", [3; 6]);
+        let _dirt = solid!("voidborne:dirt", "Dirt", [2; 6]);
+        let _stone = solid!("voidborne:stone", "Stone", [3; 6]);
 
         let coal_ore = solid!("voidborne:coal_ore", "Coal Ore", [4; 6]);
         let iron_ore = solid!("voidborne:iron_ore", "Iron Ore", [5; 6]);

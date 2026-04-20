@@ -21,9 +21,13 @@ use crate::context::GpuContext;
 use crate::frame_data::{CascadeUBO, ChunkOriginUBO, FrameData, FrameUBO};
 use crate::mesh::{ChunkEntry, GpuMesh};
 use crate::passes::{
-    gbuffer::GbufferPass, lighting::LightingPass,
-    motion_blur::MotionBlurPass,
-    post::PostPass, shadow::ShadowPass, sky::SkyPass,
+    gbuffer::GbufferPass,
+    lighting::LightingPass,
+    motion_blur::{MotionBlurPass, MotionBlurSettings},
+    overlay::OverlayPass,
+    post::PostPass,
+    shadow::ShadowPass,
+    sky::SkyPass,
 };
 use crate::texture_pool::TexturePool;
 
@@ -91,7 +95,7 @@ pub struct VoidborneRenderer {
     frame_buf: wgpu::Buffer,
     frame_bg: wgpu::BindGroup,
     /// Shared frame bind group layout (group 0 for G-buffer + lighting).
-    frame_bgl: wgpu::BindGroupLayout,
+    _frame_bgl: wgpu::BindGroupLayout,
 
     // ── Cascade UBO (for lighting pass group 0 binding 1) ──
     cascade_buf: wgpu::Buffer,
@@ -109,6 +113,10 @@ pub struct VoidborneRenderer {
     sky: SkyPass,
     motion_blur: MotionBlurPass,
     post: PostPass,
+    overlay: OverlayPass,
+
+    // ── egui ─────────────────────────────────────────────
+    egui_renderer: egui_wgpu::Renderer,
 
     // ── Chunk mesh store ─────────────────────────────────
     chunks: Vec<ChunkEntry>,
@@ -162,7 +170,7 @@ impl VoidborneRenderer {
         });
 
         // ── Cascade UBO ───────────────────────────────────
-        let cascade_ubo = CascadeUBO {
+        let _cascade_ubo = CascadeUBO {
             view_proj: [bytemuck::Zeroable::zeroed(); 4],
         };
         // We store CascadeUBO + a vec4 splits field.
@@ -185,11 +193,15 @@ impl VoidborneRenderer {
             device,
             queue,
             &pool,
-            ctx.surface_format,
+            pool.format(crate::texture_pool::handles::HDR),
+            &frame_bgl,
             "assets/skybox/void.png",
         );
         let motion_blur = MotionBlurPass::new(device, &pool);
-        let post = PostPass::new(device, &pool, ctx.surface_format);
+        let post = PostPass::new(device, queue, &pool, ctx.surface_format);
+        let overlay = OverlayPass::new(device, ctx.surface_format);
+
+        let egui_renderer = egui_wgpu::Renderer::new(device, ctx.surface_format, None, 1, false);
 
         // ── Combined lighting frame+cascade bind group ───
         let lighting_frame_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -229,7 +241,7 @@ impl VoidborneRenderer {
             pool,
             frame_buf,
             frame_bg,
-            frame_bgl,
+            _frame_bgl: frame_bgl,
             cascade_buf,
             lighting_frame_bg,
             _atlas_tex,
@@ -240,6 +252,8 @@ impl VoidborneRenderer {
             sky,
             motion_blur,
             post,
+            overlay,
+            egui_renderer,
             chunks: Vec::new(),
             frame_data: fd,
         }
@@ -304,10 +318,41 @@ impl VoidborneRenderer {
             .write_buffer(&self.frame_buf, 0, bytemuck::bytes_of(&ubo));
     }
 
+    // ── egui ──────────────────────────────────────────────
+
+    /// Upload / free egui textures.  Call before `render()`.
+    pub fn apply_egui_textures(&mut self, delta: &egui::TexturesDelta) {
+        for (id, image_delta) in &delta.set {
+            self.egui_renderer
+                .update_texture(&self.ctx.device, &self.ctx.queue, *id, image_delta);
+        }
+        for id in &delta.free {
+            self.egui_renderer.free_texture(id);
+        }
+    }
+
+    /// Maximum texture dimension supported by this adapter.
+    pub fn max_texture_side(&self) -> usize {
+        self.ctx.device.limits().max_texture_dimension_2d as usize
+    }
+
+    /// Apply new motion-blur settings.
+    pub fn update_motion_blur(&mut self, settings: MotionBlurSettings) {
+        self.motion_blur.update_settings(&self.ctx.queue, settings);
+    }
+
     /// Render one frame to the swapchain.
     ///
+    /// * `targeted_block` — world-space integer block coords for the selection
+    ///   outline, or `None` when no block is targeted.
+    /// * `egui` — optional `(primitives, screen_descriptor)` produced by egui.
+    ///
     /// Returns `Err(wgpu::SurfaceError::...)` on transient surface errors.
-    pub fn render(&self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(
+        &mut self,
+        targeted_block: Option<[i32; 3]>,
+        egui: Option<(&[egui::ClippedPrimitive], &egui_wgpu::ScreenDescriptor)>,
+    ) -> Result<(), wgpu::SurfaceError> {
         let surface_tex = self.ctx.surface.get_current_texture()?;
         let surface_view = surface_tex.texture.create_view(&Default::default());
 
@@ -368,7 +413,50 @@ impl VoidborneRenderer {
         // ── Tonemap → swapchain ───────────────────────────
         self.post.record(&mut encoder, &surface_view);
 
-        queue.submit([encoder.finish()]);
+        // ── Overlay (outline + crosshair) ─────────────────
+        self.overlay.record(
+            &mut encoder,
+            queue,
+            &surface_view,
+            pool,
+            &self.frame_bg,
+            targeted_block,
+        );
+
+        // ── egui ──────────────────────────────────────────
+        if let Some((primitives, screen_desc)) = egui {
+            // Upload vertex/index buffers; may return extra command buffers.
+            let mut extra = self.egui_renderer.update_buffers(
+                device,
+                queue,
+                &mut encoder,
+                primitives,
+                screen_desc,
+            );
+            {
+                let mut pass = encoder
+                    .begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("egui"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &surface_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        ..Default::default()
+                    })
+                    .forget_lifetime();
+                self.egui_renderer
+                    .render(&mut pass, primitives, screen_desc);
+            }
+            extra.push(encoder.finish());
+            queue.submit(extra);
+        } else {
+            queue.submit([encoder.finish()]);
+        }
         surface_tex.present();
 
         Ok(())
@@ -378,13 +466,18 @@ impl VoidborneRenderer {
 
     /// Handle window resize.
     pub fn resize(&mut self, width: u32, height: u32) {
+        // Ignore zero-size resize events (e.g. minimized window).
+        if width == 0 || height == 0 {
+            return;
+        }
         self.ctx.resize(width, height);
         self.pool.rebuild(&self.ctx.device, width, height);
 
         // Rebuild bind groups that reference screen-size textures.
         self.lighting.rebuild_gbuf_bg(&self.ctx.device, &self.pool);
         self.sky.rebuild_sky_bg(&self.ctx.device, &self.pool);
-        self.motion_blur.rebuild_tex_bg(&self.ctx.device, &self.pool);
+        self.motion_blur
+            .rebuild_tex_bg(&self.ctx.device, &self.pool);
         self.post.rebuild_hdr_bg(&self.ctx.device, &self.pool);
 
         // Re-create lighting_frame_bg (layout may reuse same buffers).
@@ -405,5 +498,18 @@ impl VoidborneRenderer {
                     },
                 ],
             });
+    }
+
+    /// Change the swapchain present mode (V-Sync on/off) without a full resize.
+    pub fn set_present_mode(&mut self, mode: wgpu::PresentMode) {
+        self.ctx.set_present_mode(mode);
+    }
+
+    pub fn ctx_width(&self) -> u32 {
+        self.ctx.width()
+    }
+
+    pub fn ctx_height(&self) -> u32 {
+        self.ctx.height()
     }
 }

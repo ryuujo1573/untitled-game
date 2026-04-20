@@ -20,15 +20,19 @@
 
 pub mod context;
 pub mod frame_data;
-pub mod texture_pool;
 pub mod graph;
 pub mod mesh;
 pub mod passes;
 pub mod renderer;
+pub mod texture_pool;
 
 pub use context::GpuContext;
 pub use frame_data::{FrameData, FrameUBO};
 pub use mesh::GpuMesh;
 pub use passes::motion_blur::{MotionBlurQuality, MotionBlurSettings};
 pub use renderer::VoidborneRenderer;
-pub use texture_pool::{TextureHandle, TexturePool, handles};
+pub use texture_pool::{handles, TextureHandle, TexturePool};
+
+// Re-export egui types needed by consumers.
+pub use egui;
+pub use egui_wgpu;

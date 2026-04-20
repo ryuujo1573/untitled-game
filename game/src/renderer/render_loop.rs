@@ -2,8 +2,14 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use glam::{IVec2, Mat4, Vec3};
+use voidborne_math::coord::ChunkPos;
+use voidborne_math::pack::{oct_encode, oct_to_snorm16};
+use voidborne_render::{FrameData, MotionBlurSettings, VoidborneRenderer};
+use voidborne_render::passes::motion_blur::MotionBlurQuality as RenderMBQuality;
+use voidborne_world::mesh::SectionMesh;
+
 use crate::app::{MotionBlurQuality, VideoSettings};
-use crate::renderer::gpu::GpuContext;
 use crate::renderer::types::{ChunkMeshData, EguiFrame, FrameState};
 
 pub enum RenderCommand {
@@ -29,31 +35,110 @@ pub enum RenderCommand {
     Shutdown,
 }
 
-pub type SharedGpu = Arc<Mutex<GpuContext>>;
+pub type SharedGpu = Arc<Mutex<VoidborneRenderer>>;
 
 pub fn spawn_render_thread(
-    gpu: GpuContext,
+    renderer: VoidborneRenderer,
 ) -> (mpsc::Sender<RenderCommand>, std::thread::JoinHandle<()>) {
     let (tx, rx) = mpsc::channel();
-    let gpu = Arc::new(Mutex::new(gpu));
+    let shared = Arc::new(Mutex::new(renderer));
 
     let handle = std::thread::spawn(move || {
-        render_loop(rx, gpu);
+        render_loop(rx, shared);
     });
 
     (tx, handle)
 }
 
-fn identity_f32_16() -> [f32; 16] {
-    [
-        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]
+// ── Mesh format bridge ────────────────────────────────────────────────
+//
+// The game's chunk mesher produces `ChunkMeshData` with raw float3 normals.
+// `VoidborneRenderer` expects `SectionMesh` with oct-encoded snorm16 normals.
+
+fn section_mesh_from_chunk_data(data: &ChunkMeshData) -> SectionMesh {
+    let n = data.vertex_count as usize;
+
+    // Positions: direct copy.
+    let positions = data.positions.clone();
+
+    // Normals: raw xyz → oct_encode → snorm16 pair.
+    let mut normals_oct = Vec::with_capacity(n * 2);
+    for i in 0..n {
+        let nx = data.normals[i * 3];
+        let ny = data.normals[i * 3 + 1];
+        let nz = data.normals[i * 3 + 2];
+        let normal = Vec3::new(nx, ny, nz).normalize_or_zero();
+        let enc = oct_encode(normal);
+        let [a, b] = oct_to_snorm16(enc);
+        normals_oct.push(a);
+        normals_oct.push(b);
+    }
+
+    // Tangents: derive from normal axis; choose perpendicular via cross product.
+    let mut tangents_oct = Vec::with_capacity(n * 2);
+    for i in 0..n {
+        let nx = data.normals[i * 3];
+        let ny = data.normals[i * 3 + 1];
+        let nz = data.normals[i * 3 + 2];
+        let normal = Vec3::new(nx, ny, nz).normalize_or_zero();
+        let up = if normal.y.abs() > 0.99 { Vec3::X } else { Vec3::Y };
+        let tangent = up.cross(normal).normalize_or(Vec3::X);
+        let enc = oct_encode(tangent);
+        let [a, b] = oct_to_snorm16(enc);
+        tangents_oct.push(a);
+        tangents_oct.push(b);
+    }
+
+    // UVL: [u, v, tile, light_mult] → [u, v, tile, 0.0]
+    // Drop the face ambient multiplier; the deferred lighting pass
+    // computes illumination from the G-buffer sun direction.
+    let mut uvl = Vec::with_capacity(n * 4);
+    for i in 0..n {
+        uvl.push(data.uvls[i * 4]);     // u
+        uvl.push(data.uvls[i * 4 + 1]); // v
+        uvl.push(data.uvls[i * 4 + 2]); // tile index (f32)
+        uvl.push(0.0_f32);              // pad
+    }
+
+    // Light: direct copy.
+    let light = data.lights.clone();
+
+    SectionMesh {
+        positions,
+        normals_oct,
+        tangents_oct,
+        uvl,
+        light,
+        vertex_count: data.vertex_count,
+    }
 }
 
-fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
-    // The render thread keeps its own target_dt independently of the
-    // main-thread frame cap.  It starts at "uncapped" (1 µs) and is
-    // updated whenever VideoSettings arrive.
+// ── FrameData builder ─────────────────────────────────────────────────
+
+fn frame_data_from_state(state: &FrameState, prev_vp: Mat4, time: f32) -> FrameData {
+    let view = Mat4::from_cols_array(&state.camera.view_matrix);
+    let proj = Mat4::from_cols_array(&state.camera.projection_matrix);
+    let view_proj = proj * view;
+    let cam_pos = Vec3::from_array(state.camera.position);
+    let sun_dir = Vec3::from_slice(&state.sun_direction).normalize_or(Vec3::Y);
+
+    FrameData {
+        view,
+        proj,
+        view_proj,
+        prev_view_proj: prev_vp,
+        cam_pos,
+        sun_dir,
+        sun_intensity: 6.0,
+        time,
+        near_z: 0.1,
+        far_z: 1024.0,
+    }
+}
+
+// ── Render loop ───────────────────────────────────────────────────────
+
+fn render_loop(rx: mpsc::Receiver<RenderCommand>, renderer: SharedGpu) {
     let mut target_dt = Duration::from_micros(1);
     let mut frame_state = FrameState {
         camera: crate::renderer::types::CameraState {
@@ -65,16 +150,16 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
         time: 0.0,
         targeted_block: None,
     };
-    // Primitives + screen descriptor retained across frames so egui is
-    // composited on every rendered frame, not just the one where a new
-    // EguiFrame arrived.  Texture uploads are applied eagerly on arrival
-    // and must not be re-applied on subsequent frames.
+
     let mut retained_primitives: Vec<egui::ClippedPrimitive> = Vec::new();
-    let mut retained_screen: egui_wgpu::ScreenDescriptor = egui_wgpu::ScreenDescriptor {
+    let mut retained_screen = egui_wgpu::ScreenDescriptor {
         size_in_pixels: [1280, 720],
         pixels_per_point: 1.0,
     };
-    let mut egui_ready = false; // true once we have at least one frame
+    let mut egui_ready = false;
+
+    let mut prev_view_proj = Mat4::IDENTITY;
+    let mut accumulated_time = 0.0_f32;
 
     loop {
         let frame_start = Instant::now();
@@ -82,48 +167,56 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
         loop {
             match rx.try_recv() {
                 Ok(RenderCommand::LoadChunk(data)) => {
-                    if let Ok(mut g) = gpu.lock() {
-                        g.load_chunk(data);
+                    if let Ok(mut r) = renderer.lock() {
+                        let pos = ChunkPos(IVec2::new(data.cx, data.cz));
+                        if data.vertex_count == 0 {
+                            r.unload_chunk(pos);
+                        } else {
+                            let mesh = section_mesh_from_chunk_data(&data);
+                            r.load_chunk(pos, &mesh);
+                        }
                     }
                 }
                 Ok(RenderCommand::UnloadChunk { cx, cz }) => {
-                    if let Ok(mut g) = gpu.lock() {
-                        g.unload_chunk(cx, cz);
+                    if let Ok(mut r) = renderer.lock() {
+                        r.unload_chunk(ChunkPos(IVec2::new(cx, cz)));
                     }
                 }
                 Ok(RenderCommand::UpdateFrame(s)) => {
                     frame_state = s;
                 }
                 Ok(RenderCommand::UpdateEgui(ef)) => {
-                    // Upload / free textures immediately.  These calls write
-                    // directly to the queue without needing an encoder, so
-                    // they are safe to do outside of render().
-                    if let Ok(mut g) = gpu.lock() {
-                        g.apply_egui_textures(&ef.textures_delta);
+                    if let Ok(mut r) = renderer.lock() {
+                        r.apply_egui_textures(&ef.textures_delta);
                     }
-                    // Retain draw data for every subsequent render frame.
                     retained_primitives = ef.primitives;
                     retained_screen = ef.screen_descriptor;
                     egui_ready = true;
                 }
                 Ok(RenderCommand::Resize { width, height }) => {
-                    if let Ok(mut g) = gpu.lock() {
-                        g.resize(width, height);
+                    if let Ok(mut r) = renderer.lock() {
+                        r.resize(width, height);
                     }
                 }
                 Ok(RenderCommand::SetVideoSettings(vs)) => {
-                    if let Ok(mut g) = gpu.lock() {
-                        g.set_present_mode(vs.vsync.to_wgpu());
+                    if let Ok(mut r) = renderer.lock() {
+                        r.set_present_mode(vs.vsync.to_wgpu());
                     }
-                    // The software cap in the render thread is only relevant
-                    // when V-Sync is off and no main-thread limit is active.
-                    // Keep it at near-zero; pacing is owned by the main thread.
                     target_dt = Duration::from_micros(1);
                 }
                 Ok(RenderCommand::SetMotionBlur { enabled, intensity, quality }) => {
-                    // TODO: forward to voidborne-render MotionBlurPass once
-                    // the game binary is migrated to VoidborneRenderer.
-                    let _ = (enabled, intensity, quality);
+                    if let Ok(mut r) = renderer.lock() {
+                        r.update_motion_blur(MotionBlurSettings {
+                            enabled,
+                            intensity,
+                            quality: match quality {
+                                MotionBlurQuality::Low    => RenderMBQuality::Low,
+                                MotionBlurQuality::Medium => RenderMBQuality::Medium,
+                                MotionBlurQuality::High   => RenderMBQuality::High,
+                            },
+                            debug_viz: false,
+                        });
+                    }
                 }
                 Ok(RenderCommand::Shutdown) => return,
                 Err(mpsc::TryRecvError::Empty) => break,
@@ -131,13 +224,34 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
             }
         }
 
-        if let Ok(mut g) = gpu.lock() {
+        // Build and upload per-frame uniforms.
+        let frame_data = frame_data_from_state(&frame_state, prev_view_proj, accumulated_time);
+        let current_vp = frame_data.view_proj;
+
+        if let Ok(mut r) = renderer.lock() {
+            r.update_frame(frame_data);
+
             let egui = if egui_ready {
                 Some((&retained_primitives[..], &retained_screen))
             } else {
                 None
             };
-            g.render(&frame_state, egui);
+
+            match r.render(frame_state.targeted_block, egui) {
+                Ok(()) => {}
+                Err(wgpu::SurfaceError::Lost) => {
+                    let w = r.ctx_width();
+                    let h = r.ctx_height();
+                    r.resize(w, h);
+                }
+                Err(e) => log::error!("render error: {e:?}"),
+            }
+        }
+
+        prev_view_proj = current_vp;
+        accumulated_time += frame_start.elapsed().as_secs_f32();
+        if accumulated_time > 3600.0 {
+            accumulated_time -= 3600.0;
         }
 
         let elapsed = frame_start.elapsed();
@@ -146,3 +260,13 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
         }
     }
 }
+
+fn identity_f32_16() -> [f32; 16] {
+    [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+}
+

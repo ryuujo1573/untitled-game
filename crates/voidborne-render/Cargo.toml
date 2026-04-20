@@ -16,3 +16,5 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 smallvec = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png"] }
+egui = "0.31"
+egui-wgpu = "0.31"

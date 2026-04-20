@@ -39,8 +39,6 @@ fn fallback_rgba() -> (Vec<u8>, u32, u32) {
 /// Equirectangular skybox render pass.
 pub struct SkyPass {
     pub pipeline: wgpu::RenderPipeline,
-    /// Layout for group 0: FrameUBO.
-    pub frame_bgl: wgpu::BindGroupLayout,
     /// Layout for group 1: equirect + depth + sampler.
     pub sky_bgl: wgpu::BindGroupLayout,
     /// Bind group for group 1 (rebuilt on resize because depth_tex changes).
@@ -62,6 +60,7 @@ impl SkyPass {
         queue: &wgpu::Queue,
         pool: &TexturePool,
         hdr_format: wgpu::TextureFormat,
+        frame_bgl: &wgpu::BindGroupLayout,
         rgba: &[u8],
         width: u32,
         height: u32,
@@ -77,7 +76,9 @@ impl SkyPass {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
+            // sRGB format: hardware converts sRGB→linear on sample,
+            // matching the encoding of standard sky panorama PNGs.
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -114,19 +115,8 @@ impl SkyPass {
         });
 
         // ── Bind group layouts ───────────────────────────
-        let frame_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("sky_frame_bgl"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
+        // frame_bgl is provided by the caller so the pipeline is compatible
+        // with the renderer's shared frame_bg bind group.
 
         let sky_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("sky_bgl"),
@@ -166,7 +156,7 @@ impl SkyPass {
         // ── Pipeline ─────────────────────────────────────
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("sky_layout"),
-            bind_group_layouts: &[&frame_bgl, &sky_bgl],
+            bind_group_layouts: &[frame_bgl, &sky_bgl],
             push_constant_ranges: &[],
         });
 
@@ -209,7 +199,6 @@ impl SkyPass {
 
         let mut pass = Self {
             pipeline,
-            frame_bgl,
             sky_bgl,
             sky_bg: None,
             sampler,
@@ -227,10 +216,11 @@ impl SkyPass {
         queue: &wgpu::Queue,
         pool: &TexturePool,
         hdr_format: wgpu::TextureFormat,
+        frame_bgl: &wgpu::BindGroupLayout,
         path: &str,
     ) -> Self {
         let (rgba, w, h) = load_png(path);
-        Self::new(device, queue, pool, hdr_format, &rgba, w, h)
+        Self::new(device, queue, pool, hdr_format, frame_bgl, &rgba, w, h)
     }
 
     /// Rebuild the sky bind group.  Must be called after any pool resize

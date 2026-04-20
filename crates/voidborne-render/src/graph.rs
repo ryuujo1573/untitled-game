@@ -5,7 +5,6 @@
 //! the necessary resource barriers automatically as passes transition
 //! between render-attachment and shader-read usage.
 
-use std::sync::Arc;
 use wgpu;
 use crate::texture_pool::TexturePool;
 

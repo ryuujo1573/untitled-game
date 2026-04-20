@@ -3,10 +3,7 @@
 //! Full-screen triangle reading the G-buffer + CSM shadow atlas.
 //! Outputs to the HDR Rgba16Float buffer.
 
-use bytemuck;
 use wgpu;
-use wgpu::util::DeviceExt;
-use crate::frame_data::CascadeUBO;
 use crate::texture_pool::{handles, TexturePool};
 
 /// Pipeline and layouts for the deferred lighting pass.
@@ -28,7 +25,7 @@ impl LightingPass {
     pub fn new(
         device: &wgpu::Device,
         pool: &TexturePool,
-        surface_format: wgpu::TextureFormat,
+        _surface_format: wgpu::TextureFormat,
     ) -> Self {
         let frame_bgl = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
@@ -293,7 +290,9 @@ impl LightingPass {
                     wgpu::BindGroupEntry {
                         binding: 4,
                         resource: wgpu::BindingResource::TextureView(
-                            pool.view(handles::DEPTH),
+                            pool.depth_only_view
+                                .as_ref()
+                                .expect("depth_only_view must be built before lighting"),
                         ),
                     },
                     wgpu::BindGroupEntry {

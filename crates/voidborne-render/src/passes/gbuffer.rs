@@ -4,7 +4,6 @@
 //! emission+ao, motion+light) plus a depth/stencil attachment.
 
 use wgpu;
-use crate::frame_data::ChunkOriginUBO;
 use crate::mesh::GpuMesh;
 use crate::texture_pool::{handles, TexturePool};
 

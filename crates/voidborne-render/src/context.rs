@@ -127,6 +127,12 @@ impl GpuContext {
         self.surface.configure(&self.device, &self.surface_config);
     }
 
+    /// Change the swapchain present mode (V-Sync on/off) without a full resize.
+    pub fn set_present_mode(&mut self, mode: wgpu::PresentMode) {
+        self.surface_config.present_mode = mode;
+        self.surface.configure(&self.device, &self.surface_config);
+    }
+
     pub fn width(&self) -> u32 {
         self.surface_config.width
     }

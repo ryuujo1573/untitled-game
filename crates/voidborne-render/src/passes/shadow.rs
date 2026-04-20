@@ -7,9 +7,7 @@
 use bytemuck;
 use wgpu;
 use wgpu::util::DeviceExt;
-use crate::frame_data::CascadeUBO;
 use crate::mesh::GpuMesh;
-use crate::texture_pool::TexturePool;
 
 /// Pipeline and bind group layouts for the CSM shadow pass.
 pub struct ShadowPass {

@@ -12,8 +12,8 @@ use voidborne_math::ChunkPos;
 
 use crate::block::{block_registry, BlockState};
 use crate::column::ChunkColumn;
-use crate::world::{LoadedColumn, World};
-use crate::{MAX_Y, MIN_Y};
+use crate::world::World;
+use crate::MIN_Y;
 
 // ── WorldgenLayer trait ───────────────────────────────
 

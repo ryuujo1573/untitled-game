@@ -229,10 +229,10 @@ pub struct GameApp {
 
 impl GameApp {
     pub fn new(window: Arc<Window>) -> Self {
-        use crate::renderer::gpu::GpuContext;
-        let gpu = GpuContext::from_window(window.clone());
-        let max_texture_side = gpu.max_texture_side;
-        let (tx, join) = spawn_render_thread(gpu);
+        use voidborne_render::VoidborneRenderer;
+        let renderer_instance = VoidborneRenderer::new(window.clone());
+        let max_texture_side = renderer_instance.max_texture_side();
+        let (tx, join) = spawn_render_thread(renderer_instance);
         let renderer = RendererHandle {
             tx,
             join: Some(join),

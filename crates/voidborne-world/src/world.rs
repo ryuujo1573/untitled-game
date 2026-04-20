@@ -4,7 +4,7 @@ use ahash::AHashMap;
 
 use voidborne_math::ChunkPos;
 
-use crate::block::{block_registry, BlockState};
+use crate::block::BlockState;
 use crate::column::ChunkColumn;
 use crate::light::LightVolume;
 
@@ -26,7 +26,8 @@ impl LoadedColumn {
 
     /// Lazily allocate the light volume.
     pub fn ensure_light(&mut self) -> &mut LightVolume {
-        self.light.get_or_insert_with(|| Box::new(LightVolume::new()))
+        self.light
+            .get_or_insert_with(|| Box::new(LightVolume::new()))
     }
 
     // Delegate the most common column methods.
