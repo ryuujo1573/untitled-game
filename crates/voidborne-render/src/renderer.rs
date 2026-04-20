@@ -21,7 +21,9 @@ use crate::context::GpuContext;
 use crate::frame_data::{CascadeUBO, ChunkOriginUBO, FrameData, FrameUBO};
 use crate::mesh::{ChunkEntry, GpuMesh};
 use crate::passes::{
-    gbuffer::GbufferPass, lighting::LightingPass, post::PostPass, shadow::ShadowPass, sky::SkyPass,
+    gbuffer::GbufferPass, lighting::LightingPass,
+    motion_blur::MotionBlurPass,
+    post::PostPass, shadow::ShadowPass, sky::SkyPass,
 };
 use crate::texture_pool::TexturePool;
 
@@ -105,6 +107,7 @@ pub struct VoidborneRenderer {
     shadow: ShadowPass,
     lighting: LightingPass,
     sky: SkyPass,
+    motion_blur: MotionBlurPass,
     post: PostPass,
 
     // ── Chunk mesh store ─────────────────────────────────
@@ -185,6 +188,7 @@ impl VoidborneRenderer {
             ctx.surface_format,
             "assets/skybox/void.png",
         );
+        let motion_blur = MotionBlurPass::new(device, &pool);
         let post = PostPass::new(device, &pool, ctx.surface_format);
 
         // ── Combined lighting frame+cascade bind group ───
@@ -234,6 +238,7 @@ impl VoidborneRenderer {
             shadow,
             lighting,
             sky,
+            motion_blur,
             post,
             chunks: Vec::new(),
             frame_data: fd,
@@ -357,6 +362,9 @@ impl VoidborneRenderer {
         // ── Skybox (equirect, fills sky pixels in HDR) ────
         self.sky.record(&mut encoder, pool, &self.frame_bg);
 
+        // ── Motion blur (HDR + velocity → MOTION_BLUR_HDR) ─
+        self.motion_blur.record(&mut encoder, pool);
+
         // ── Tonemap → swapchain ───────────────────────────
         self.post.record(&mut encoder, &surface_view);
 
@@ -376,6 +384,7 @@ impl VoidborneRenderer {
         // Rebuild bind groups that reference screen-size textures.
         self.lighting.rebuild_gbuf_bg(&self.ctx.device, &self.pool);
         self.sky.rebuild_sky_bg(&self.ctx.device, &self.pool);
+        self.motion_blur.rebuild_tex_bg(&self.ctx.device, &self.pool);
         self.post.rebuild_hdr_bg(&self.ctx.device, &self.pool);
 
         // Re-create lighting_frame_bg (layout may reuse same buffers).

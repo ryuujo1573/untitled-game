@@ -232,7 +232,7 @@ impl PostPass {
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::TextureView(
-                            pool.view(handles::HDR),
+                            pool.view(handles::MOTION_BLUR_HDR),
                         ),
                     },
                     wgpu::BindGroupEntry {

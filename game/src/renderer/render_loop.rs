@@ -2,7 +2,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::app::VideoSettings;
+use crate::app::{MotionBlurQuality, VideoSettings};
 use crate::renderer::gpu::GpuContext;
 use crate::renderer::types::{ChunkMeshData, EguiFrame, FrameState};
 
@@ -20,6 +20,12 @@ pub enum RenderCommand {
     },
     /// Apply new video settings: update present mode + inner frame cap.
     SetVideoSettings(VideoSettings),
+    /// Apply new motion blur settings to the render pass.
+    SetMotionBlur {
+        enabled:   bool,
+        intensity: f32,
+        quality:   MotionBlurQuality,
+    },
     Shutdown,
 }
 
@@ -113,6 +119,11 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
                     // when V-Sync is off and no main-thread limit is active.
                     // Keep it at near-zero; pacing is owned by the main thread.
                     target_dt = Duration::from_micros(1);
+                }
+                Ok(RenderCommand::SetMotionBlur { enabled, intensity, quality }) => {
+                    // TODO: forward to voidborne-render MotionBlurPass once
+                    // the game binary is migrated to VoidborneRenderer.
+                    let _ = (enabled, intensity, quality);
                 }
                 Ok(RenderCommand::Shutdown) => return,
                 Err(mpsc::TryRecvError::Empty) => break,

@@ -29,5 +29,6 @@ pub mod renderer;
 pub use context::GpuContext;
 pub use frame_data::{FrameData, FrameUBO};
 pub use mesh::GpuMesh;
+pub use passes::motion_blur::{MotionBlurQuality, MotionBlurSettings};
 pub use renderer::VoidborneRenderer;
 pub use texture_pool::{TextureHandle, TexturePool, handles};

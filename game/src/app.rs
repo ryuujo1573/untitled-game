@@ -117,6 +117,32 @@ impl VsyncMode {
     }
 }
 
+/// Per-pixel sample count for the motion blur post-process pass.
+///
+/// Maps to the `MotionBlurQuality` variants in `voidborne-render`.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum MotionBlurQuality {
+    /// 4 samples — lowest cost; visible banding on very fast motion.
+    Low,
+    /// 8 samples — balanced default for mid-range hardware.
+    Medium,
+    /// 16 samples — smooth blur for high-end or cinematic modes.
+    High,
+}
+
+impl MotionBlurQuality {
+    pub const ALL: &'static [MotionBlurQuality] =
+        &[MotionBlurQuality::Low, MotionBlurQuality::Medium, MotionBlurQuality::High];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            MotionBlurQuality::Low    => "Low",
+            MotionBlurQuality::Medium => "Medium",
+            MotionBlurQuality::High   => "High",
+        }
+    }
+}
+
 /// All video-related settings that can be changed from the pause menu.
 #[derive(Clone, Copy)]
 pub struct VideoSettings {
@@ -126,6 +152,12 @@ pub struct VideoSettings {
     pub fps_limit: FpsLimit,
     /// V-Sync / adaptive-sync mode.
     pub vsync: VsyncMode,
+    /// Whether the motion blur post-process pass is active.
+    pub motion_blur_enabled: bool,
+    /// Blur strength applied to motion vectors (0.0 – 1.0).
+    pub motion_blur_intensity: f32,
+    /// Sample count quality tier for the blur kernel.
+    pub motion_blur_quality: MotionBlurQuality,
 }
 
 impl Default for VideoSettings {
@@ -134,6 +166,9 @@ impl Default for VideoSettings {
             fps_limit_enabled: false,
             fps_limit: FpsLimit::Fps240,
             vsync: VsyncMode::On,
+            motion_blur_enabled: true,
+            motion_blur_intensity: 1.0,
+            motion_blur_quality: MotionBlurQuality::Medium,
         }
     }
 }
@@ -566,6 +601,17 @@ impl GameApp {
                 .tx
                 .send(RenderCommand::SetVideoSettings(video));
         }
+        if video.motion_blur_enabled != self.video_settings.motion_blur_enabled
+            || video.motion_blur_intensity != self.video_settings.motion_blur_intensity
+            || video.motion_blur_quality != self.video_settings.motion_blur_quality
+        {
+            self.video_settings = video;
+            let _ = self.renderer.tx.send(RenderCommand::SetMotionBlur {
+                enabled:   video.motion_blur_enabled,
+                intensity: video.motion_blur_intensity,
+                quality:   video.motion_blur_quality,
+            });
+        }
         match action {
             MenuAction::Resume => {
                 self.paused = false;
@@ -885,6 +931,63 @@ fn pause_ui(
                                     let selected = video.fps_limit == opt;
                                     if ui.selectable_label(selected, opt.label()).clicked() {
                                         video.fps_limit = opt;
+                                    }
+                                    ui.add_space(4.0);
+                                }
+                            });
+                        }
+
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+
+                        // ── Motion Blur toggle ────────────────────
+                        setting_row(ui, "Motion Blur", |ui| {
+                            let label = if video.motion_blur_enabled { "On" } else { "Off" };
+                            if ui
+                                .selectable_label(video.motion_blur_enabled, label)
+                                .clicked()
+                            {
+                                video.motion_blur_enabled = !video.motion_blur_enabled;
+                            }
+                        });
+
+                        if video.motion_blur_enabled {
+                            // ── Intensity slider ──────────────────
+                            let mut pct = (video.motion_blur_intensity * 100.0).round() as i32;
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("  Intensity")
+                                        .color(egui::Color32::from_gray(190)),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            egui::RichText::new(format!("{pct}%"))
+                                                .monospace()
+                                                .color(egui::Color32::from_gray(160)),
+                                        );
+                                    },
+                                );
+                            });
+                            let mut pct_f = pct as f32;
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut pct_f, 0.0..=100.0)
+                                        .show_value(false),
+                                )
+                                .changed()
+                            {
+                                video.motion_blur_intensity = pct_f / 100.0;
+                            }
+
+                            // ── Quality tier ──────────────────────
+                            setting_row(ui, "  Quality", |ui| {
+                                for &opt in MotionBlurQuality::ALL {
+                                    let selected = video.motion_blur_quality == opt;
+                                    if ui.selectable_label(selected, opt.label()).clicked() {
+                                        video.motion_blur_quality = opt;
                                     }
                                     ui.add_space(4.0);
                                 }
