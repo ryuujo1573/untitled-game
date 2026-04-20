@@ -86,6 +86,12 @@ fn fs_main(in: VertOut) -> GBufferOut {
         block_atlas, atlas_sampler, in.uv, in.tile_id);
     if albedo.a < 0.5 { discard; }
 
+    // Extract per-tile PBR roughness packed in atlas alpha:
+    //   stored = 0.5 + roughness * 0.5  → roughness = (a - 0.5) * 2
+    // Solid-block tiles always store alpha ≥ 0.502 so the discard
+    // above never fires on them; transparent tiles use alpha < 0.5.
+    let roughness = clamp((albedo.a - 0.5) * 2.0, 0.0, 1.0);
+
     // Remap oct-normal from [-1,1] to [0,1] for 8/16-bit storage.
     let norm_stored = in.normal_oct * 0.5 + 0.5;
 
@@ -94,7 +100,8 @@ fn fs_main(in: VertOut) -> GBufferOut {
 
     var o: GBufferOut;
     o.albedo_flags = vec4<f32>(albedo.rgb, 0.0);
-    o.normal_rm    = vec4<f32>(norm_stored.x, norm_stored.y, 0.8, 0.0);
+    // .b = roughness, .a = metallic (0 for all terrain blocks)
+    o.normal_rm    = vec4<f32>(norm_stored.x, norm_stored.y, roughness, 0.0);
     o.emission_ao  = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     o.mv_light     = vec4<f32>(mv.x, mv.y, in.light.y, in.light.x);
     return o;
