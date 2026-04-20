@@ -13,5 +13,6 @@
   },
   "[typescriptreact]": {
     "editor.defaultFormatter": "biomejs.biome"
-  }
+  },
+  "editor.wrapOnEscapedLineFeeds": true
 }

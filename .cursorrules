@@ -1,7 +1,0 @@
-# Project Rules
-
-## Prefer `bun` as JS runtime and package manager.
-
-- **Package Manager**: Use `bun` exclusively (add, remove, update, install). No `npm`/`yarn`/`pnpm`.
-- **Testing**: Use `bun run test` to run vitest.
-- **Lint/Format**: Use `bun biome check --write`.
