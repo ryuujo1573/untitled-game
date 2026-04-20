@@ -5,6 +5,7 @@ mod session;
 mod world;
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use app::GameApp;
 use winit::application::ApplicationHandler;
@@ -15,9 +16,36 @@ use winit::window::{Window, WindowId};
 
 struct Handler {
     game: Option<GameApp>,
+    last_frame: Instant,
 }
 
 impl ApplicationHandler for Handler {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(game) = self.game.as_ref() else {
+            return;
+        };
+        let vs = game.video_settings;
+        if vs.fps_limit_enabled {
+            let interval = vs.fps_limit.as_interval();
+            let next = self.last_frame + interval;
+            let now = Instant::now();
+            if now >= next {
+                game.window().request_redraw();
+                // Arm the timer for the next frame so about_to_wait doesn't
+                // spin: without this, WaitUntil stays at a past timestamp and
+                // winit re-enters about_to_wait immediately, queuing dozens of
+                // redraws before the GPU finishes the current one.
+                event_loop.set_control_flow(ControlFlow::WaitUntil(now + interval));
+            } else {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(next));
+            }
+        } else {
+            // No software cap — request redraw immediately.
+            game.window().request_redraw();
+            event_loop.set_control_flow(ControlFlow::Poll);
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.game.is_some() {
             return;
@@ -49,6 +77,7 @@ impl ApplicationHandler for Handler {
                 game.resized(size.width, size.height);
             }
             WindowEvent::RedrawRequested => {
+                self.last_frame = Instant::now();
                 game.update_and_render();
             }
             WindowEvent::MouseInput {
@@ -106,6 +135,9 @@ fn main() {
     let event_loop = EventLoop::new().expect("failed to create event loop");
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut handler = Handler { game: None };
+    let mut handler = Handler {
+        game: None,
+        last_frame: Instant::now(),
+    };
     event_loop.run_app(&mut handler).expect("event loop error");
 }

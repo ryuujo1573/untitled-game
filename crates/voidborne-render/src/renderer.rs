@@ -8,8 +8,8 @@
 //! r.render();
 //! ```
 
-use std::sync::Arc;
 use bytemuck;
+use std::sync::Arc;
 use wgpu;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -18,15 +18,10 @@ use voidborne_math::coord::ChunkPos;
 use voidborne_world::mesh::SectionMesh;
 
 use crate::context::GpuContext;
-use crate::frame_data::{
-    CascadeUBO, ChunkOriginUBO, FrameData, FrameUBO,
-};
+use crate::frame_data::{CascadeUBO, ChunkOriginUBO, FrameData, FrameUBO};
 use crate::mesh::{ChunkEntry, GpuMesh};
 use crate::passes::{
-    gbuffer::GbufferPass,
-    lighting::LightingPass,
-    post::PostPass,
-    shadow::ShadowPass,
+    gbuffer::GbufferPass, lighting::LightingPass, post::PostPass, shadow::ShadowPass, sky::SkyPass,
 };
 use crate::texture_pool::TexturePool;
 
@@ -38,23 +33,20 @@ fn make_placeholder_atlas(
 ) -> (wgpu::Texture, wgpu::TextureView, wgpu::Sampler) {
     const LAYERS: u32 = 16;
     let data: Vec<u8> = vec![255u8; (LAYERS * 4) as usize]; // RGBA white
-    let texture = device.create_texture(
-        &wgpu::TextureDescriptor {
-            label: Some("placeholder_atlas"),
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: LAYERS,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("placeholder_atlas"),
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: LAYERS,
         },
-    );
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
     queue.write_texture(
         wgpu::TexelCopyTextureInfo {
             texture: &texture,
@@ -75,15 +67,13 @@ fn make_placeholder_atlas(
         },
     );
     let view = texture.create_view(&Default::default());
-    let sampler = device.create_sampler(
-        &wgpu::SamplerDescriptor {
-            label: Some("atlas_sampler"),
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        },
-    );
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("atlas_sampler"),
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
     (texture, view, sampler)
 }
 
@@ -97,7 +87,7 @@ pub struct VoidborneRenderer {
 
     // ── Frame UBO ────────────────────────────────────────
     frame_buf: wgpu::Buffer,
-    frame_bg:  wgpu::BindGroup,
+    frame_bg: wgpu::BindGroup,
     /// Shared frame bind group layout (group 0 for G-buffer + lighting).
     frame_bgl: wgpu::BindGroupLayout,
 
@@ -107,14 +97,15 @@ pub struct VoidborneRenderer {
     lighting_frame_bg: wgpu::BindGroup,
 
     // ── Atlas ────────────────────────────────────────────
-    _atlas_tex:  wgpu::Texture,
-    atlas_bg:    wgpu::BindGroup,
+    _atlas_tex: wgpu::Texture,
+    atlas_bg: wgpu::BindGroup,
 
     // ── Passes ───────────────────────────────────────────
-    gbuffer:   GbufferPass,
-    shadow:    ShadowPass,
-    lighting:  LightingPass,
-    post:      PostPass,
+    gbuffer: GbufferPass,
+    shadow: ShadowPass,
+    lighting: LightingPass,
+    sky: SkyPass,
+    post: PostPass,
 
     // ── Chunk mesh store ─────────────────────────────────
     chunks: Vec<ChunkEntry>,
@@ -127,7 +118,7 @@ impl VoidborneRenderer {
     pub fn new(window: Arc<Window>) -> Self {
         let ctx = GpuContext::new(window);
         let device = &ctx.device;
-        let queue  = &ctx.queue;
+        let queue = &ctx.queue;
         let w = ctx.width();
         let h = ctx.height();
 
@@ -136,44 +127,36 @@ impl VoidborneRenderer {
         pool.rebuild(device, w, h);
 
         // ── Shared frame bind group layout ───────────────
-        let frame_bgl = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                label: Some("shared_frame_bgl"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX
-                        | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            },
-        );
+        let frame_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("shared_frame_bgl"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
 
         // ── Frame UBO buffer + bind group ────────────────
         let fd = FrameData::default();
         let frame_ubo = FrameUBO::from_data(&fd, w, h);
-        let frame_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("frame_ubo"),
-                contents: bytemuck::bytes_of(&frame_ubo),
-                usage: wgpu::BufferUsages::UNIFORM
-                    | wgpu::BufferUsages::COPY_DST,
-            },
-        );
-        let frame_bg = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("frame_bg"),
-                layout: &frame_bgl,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: frame_buf.as_entire_binding(),
-                }],
-            },
-        );
+        let frame_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("frame_ubo"),
+            contents: bytemuck::bytes_of(&frame_ubo),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let frame_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("frame_bg"),
+            layout: &frame_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: frame_buf.as_entire_binding(),
+            }],
+        });
 
         // ── Cascade UBO ───────────────────────────────────
         let cascade_ubo = CascadeUBO {
@@ -185,66 +168,57 @@ impl VoidborneRenderer {
         //   splits:    vec4<f32>              →  16 B
         // Total: 272 B. Use a raw buffer filled with zeros for now.
         let cascade_data = vec![0u8; 272];
-        let cascade_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("cascade_ubo"),
-                contents: &cascade_data,
-                usage: wgpu::BufferUsages::UNIFORM
-                    | wgpu::BufferUsages::COPY_DST,
-            },
-        );
+        let cascade_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("cascade_ubo"),
+            contents: &cascade_data,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         // ── Passes ───────────────────────────────────────
-        let gbuffer  = GbufferPass::new(device, &pool);
-        let shadow   = ShadowPass::new(device);
-        let lighting = LightingPass::new(
-            device, &pool, ctx.surface_format,
+        let gbuffer = GbufferPass::new(device, &pool);
+        let shadow = ShadowPass::new(device);
+        let lighting = LightingPass::new(device, &pool, ctx.surface_format);
+        let sky = SkyPass::load_from_disk(
+            device,
+            queue,
+            &pool,
+            ctx.surface_format,
+            "assets/skybox/void.png",
         );
-        let post     = PostPass::new(
-            device, &pool, ctx.surface_format,
-        );
+        let post = PostPass::new(device, &pool, ctx.surface_format);
 
         // ── Combined lighting frame+cascade bind group ───
-        let lighting_frame_bg = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("lighting_frame_bg"),
-                layout: &lighting.frame_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: frame_buf.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: cascade_buf.as_entire_binding(),
-                    },
-                ],
-            },
-        );
+        let lighting_frame_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("lighting_frame_bg"),
+            layout: &lighting.frame_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: frame_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: cascade_buf.as_entire_binding(),
+                },
+            ],
+        });
 
         // ── Atlas placeholder ─────────────────────────────
-        let (_atlas_tex, atlas_view, atlas_sampler) =
-            make_placeholder_atlas(device, queue);
-        let atlas_bg = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("atlas_bg"),
-                layout: &gbuffer.atlas_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(
-                            &atlas_view,
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(
-                            &atlas_sampler,
-                        ),
-                    },
-                ],
-            },
-        );
+        let (_atlas_tex, atlas_view, atlas_sampler) = make_placeholder_atlas(device, queue);
+        let atlas_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("atlas_bg"),
+            layout: &gbuffer.atlas_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&atlas_sampler),
+                },
+            ],
+        });
 
         Self {
             ctx,
@@ -259,6 +233,7 @@ impl VoidborneRenderer {
             gbuffer,
             shadow,
             lighting,
+            sky,
             post,
             chunks: Vec::new(),
             frame_data: fd,
@@ -281,24 +256,25 @@ impl VoidborneRenderer {
                 origin: [bx, 0.0, bz, 0.0],
             }
         };
-        let origin_buf = self.ctx.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
+        let origin_buf = self
+            .ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("chunk_origin"),
                 contents: bytemuck::bytes_of(&origin),
                 usage: wgpu::BufferUsages::UNIFORM,
-            },
-        );
-        let chunk_bg =
-            self.ctx.device.create_bind_group(
-                &wgpu::BindGroupDescriptor {
-                    label: Some("chunk_bg"),
-                    layout: &self.gbuffer.chunk_bgl,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: origin_buf.as_entire_binding(),
-                    }],
-                },
-            );
+            });
+        let chunk_bg = self
+            .ctx
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("chunk_bg"),
+                layout: &self.gbuffer.chunk_bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: origin_buf.as_entire_binding(),
+                }],
+            });
         self.chunks.push(ChunkEntry {
             pos,
             mesh: gpu_mesh,
@@ -317,45 +293,32 @@ impl VoidborneRenderer {
     /// Update the per-frame uniform data.
     pub fn update_frame(&mut self, data: FrameData) {
         self.frame_data = data;
-        let ubo = FrameUBO::from_data(
-            &self.frame_data,
-            self.ctx.width(),
-            self.ctx.height(),
-        );
-        self.ctx.queue.write_buffer(
-            &self.frame_buf,
-            0,
-            bytemuck::bytes_of(&ubo),
-        );
+        let ubo = FrameUBO::from_data(&self.frame_data, self.ctx.width(), self.ctx.height());
+        self.ctx
+            .queue
+            .write_buffer(&self.frame_buf, 0, bytemuck::bytes_of(&ubo));
     }
 
     /// Render one frame to the swapchain.
     ///
     /// Returns `Err(wgpu::SurfaceError::...)` on transient surface errors.
-    pub fn render(
-        &self,
-    ) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&self) -> Result<(), wgpu::SurfaceError> {
         let surface_tex = self.ctx.surface.get_current_texture()?;
-        let surface_view = surface_tex
-            .texture
-            .create_view(&Default::default());
+        let surface_view = surface_tex.texture.create_view(&Default::default());
 
         let device = &self.ctx.device;
-        let queue  = &self.ctx.queue;
-        let pool   = &self.pool;
+        let queue = &self.ctx.queue;
+        let pool = &self.pool;
 
-        let mut encoder = device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor {
-                label: Some("voidborne-frame"),
-            },
-        );
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("voidborne-frame"),
+        });
 
         // ── Shadow pass (4 cascades) ──────────────────────
         // For M1 we use identity cascades (no real light frusta yet).
         if let Some(sv) = &pool.shadow_views {
             for i in 0..4usize {
-                let cascade_vp: [[f32; 16]; 4] =
-                    [[0f32; 16]; 4];
+                let cascade_vp: [[f32; 16]; 4] = [[0f32; 16]; 4];
                 let pairs: Vec<(_, &wgpu::Buffer)> = self
                     .chunks
                     .iter()
@@ -388,11 +351,11 @@ impl VoidborneRenderer {
         }
 
         // ── Deferred lighting ─────────────────────────────
-        self.lighting.record(
-            &mut encoder,
-            pool,
-            &self.lighting_frame_bg,
-        );
+        self.lighting
+            .record(&mut encoder, pool, &self.lighting_frame_bg);
+
+        // ── Skybox (equirect, fills sky pixels in HDR) ────
+        self.sky.record(&mut encoder, pool, &self.frame_bg);
 
         // ── Tonemap → swapchain ───────────────────────────
         self.post.record(&mut encoder, &surface_view);
@@ -411,32 +374,27 @@ impl VoidborneRenderer {
         self.pool.rebuild(&self.ctx.device, width, height);
 
         // Rebuild bind groups that reference screen-size textures.
-        self.lighting
-            .rebuild_gbuf_bg(&self.ctx.device, &self.pool);
-        self.post
-            .rebuild_hdr_bg(&self.ctx.device, &self.pool);
+        self.lighting.rebuild_gbuf_bg(&self.ctx.device, &self.pool);
+        self.sky.rebuild_sky_bg(&self.ctx.device, &self.pool);
+        self.post.rebuild_hdr_bg(&self.ctx.device, &self.pool);
 
         // Re-create lighting_frame_bg (layout may reuse same buffers).
-        self.lighting_frame_bg =
-            self.ctx.device.create_bind_group(
-                &wgpu::BindGroupDescriptor {
-                    label: Some("lighting_frame_bg"),
-                    layout: &self.lighting.frame_bgl,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: self
-                                .frame_buf
-                                .as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: self
-                                .cascade_buf
-                                .as_entire_binding(),
-                        },
-                    ],
-                },
-            );
+        self.lighting_frame_bg = self
+            .ctx
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("lighting_frame_bg"),
+                layout: &self.lighting.frame_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.frame_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.cascade_buf.as_entire_binding(),
+                    },
+                ],
+            });
     }
 }

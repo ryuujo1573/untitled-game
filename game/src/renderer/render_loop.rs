@@ -2,15 +2,24 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::app::VideoSettings;
 use crate::renderer::gpu::GpuContext;
 use crate::renderer::types::{ChunkMeshData, EguiFrame, FrameState};
 
 pub enum RenderCommand {
     LoadChunk(ChunkMeshData),
-    UnloadChunk { cx: i32, cz: i32 },
+    UnloadChunk {
+        cx: i32,
+        cz: i32,
+    },
     UpdateFrame(FrameState),
     UpdateEgui(EguiFrame),
-    Resize { width: u32, height: u32 },
+    Resize {
+        width: u32,
+        height: u32,
+    },
+    /// Apply new video settings: update present mode + inner frame cap.
+    SetVideoSettings(VideoSettings),
     Shutdown,
 }
 
@@ -36,7 +45,10 @@ fn identity_f32_16() -> [f32; 16] {
 }
 
 fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
-    let target_dt = Duration::from_secs_f64(1.0 / 120.0);
+    // The render thread keeps its own target_dt independently of the
+    // main-thread frame cap.  It starts at "uncapped" (1 µs) and is
+    // updated whenever VideoSettings arrive.
+    let mut target_dt = Duration::from_micros(1);
     let mut frame_state = FrameState {
         camera: crate::renderer::types::CameraState {
             position: [0.0, 10.0, 0.0],
@@ -47,7 +59,16 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
         time: 0.0,
         targeted_block: None,
     };
-    let mut latest_egui: Option<EguiFrame> = None;
+    // Primitives + screen descriptor retained across frames so egui is
+    // composited on every rendered frame, not just the one where a new
+    // EguiFrame arrived.  Texture uploads are applied eagerly on arrival
+    // and must not be re-applied on subsequent frames.
+    let mut retained_primitives: Vec<egui::ClippedPrimitive> = Vec::new();
+    let mut retained_screen: egui_wgpu::ScreenDescriptor = egui_wgpu::ScreenDescriptor {
+        size_in_pixels: [1280, 720],
+        pixels_per_point: 1.0,
+    };
+    let mut egui_ready = false; // true once we have at least one frame
 
     loop {
         let frame_start = Instant::now();
@@ -67,24 +88,31 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
                 Ok(RenderCommand::UpdateFrame(s)) => {
                     frame_state = s;
                 }
-                Ok(RenderCommand::UpdateEgui(mut new_ef)) => {
-                    // Merge texture uploads from any skipped frame so that
-                    // glyph atlas updates are never silently dropped when the
-                    // main thread produces frames faster than the render thread
-                    // consumes them.
-                    if let Some(old_ef) = latest_egui.take() {
-                        // Old uploads go first; new uploads overwrite them if
-                        // the same TextureId appears in both (last write wins).
-                        let mut merged = old_ef.textures_delta.set;
-                        merged.extend(new_ef.textures_delta.set);
-                        new_ef.textures_delta.set = merged;
+                Ok(RenderCommand::UpdateEgui(ef)) => {
+                    // Upload / free textures immediately.  These calls write
+                    // directly to the queue without needing an encoder, so
+                    // they are safe to do outside of render().
+                    if let Ok(mut g) = gpu.lock() {
+                        g.apply_egui_textures(&ef.textures_delta);
                     }
-                    latest_egui = Some(new_ef);
+                    // Retain draw data for every subsequent render frame.
+                    retained_primitives = ef.primitives;
+                    retained_screen = ef.screen_descriptor;
+                    egui_ready = true;
                 }
                 Ok(RenderCommand::Resize { width, height }) => {
                     if let Ok(mut g) = gpu.lock() {
                         g.resize(width, height);
                     }
+                }
+                Ok(RenderCommand::SetVideoSettings(vs)) => {
+                    if let Ok(mut g) = gpu.lock() {
+                        g.set_present_mode(vs.vsync.to_wgpu());
+                    }
+                    // The software cap in the render thread is only relevant
+                    // when V-Sync is off and no main-thread limit is active.
+                    // Keep it at near-zero; pacing is owned by the main thread.
+                    target_dt = Duration::from_micros(1);
                 }
                 Ok(RenderCommand::Shutdown) => return,
                 Err(mpsc::TryRecvError::Empty) => break,
@@ -93,7 +121,12 @@ fn render_loop(rx: mpsc::Receiver<RenderCommand>, gpu: SharedGpu) {
         }
 
         if let Ok(mut g) = gpu.lock() {
-            g.render(&frame_state, latest_egui.take());
+            let egui = if egui_ready {
+                Some((&retained_primitives[..], &retained_screen))
+            } else {
+                None
+            };
+            g.render(&frame_state, egui);
         }
 
         let elapsed = frame_start.elapsed();

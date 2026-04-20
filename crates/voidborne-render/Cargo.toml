@@ -15,3 +15,4 @@ pollster = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 smallvec = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png"] }

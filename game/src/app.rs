@@ -7,6 +7,7 @@ use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 use crate::engine::camera::Camera;
+use crate::engine::input::{ActionState, InputBuffer, MouseSmoother};
 use crate::engine::physics::Physics;
 use crate::engine::raycaster::raycast;
 use crate::renderer::render_loop::{spawn_render_thread, RenderCommand};
@@ -45,6 +46,98 @@ enum MenuAction {
     Quit,
 }
 
+// ── Video settings ─────────────────────────────────────
+
+/// Available discrete frame-rate limits.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum FpsLimit {
+    Fps30,
+    Fps60,
+    Fps120,
+    Fps180,
+    Fps240,
+}
+
+impl FpsLimit {
+    pub const ALL: &'static [FpsLimit] = &[
+        FpsLimit::Fps30,
+        FpsLimit::Fps60,
+        FpsLimit::Fps120,
+        FpsLimit::Fps180,
+        FpsLimit::Fps240,
+    ];
+
+    pub fn as_u32(self) -> u32 {
+        match self {
+            FpsLimit::Fps30 => 30,
+            FpsLimit::Fps60 => 60,
+            FpsLimit::Fps120 => 120,
+            FpsLimit::Fps180 => 180,
+            FpsLimit::Fps240 => 240,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FpsLimit::Fps30 => "30",
+            FpsLimit::Fps60 => "60",
+            FpsLimit::Fps120 => "120",
+            FpsLimit::Fps180 => "180",
+            FpsLimit::Fps240 => "240",
+        }
+    }
+
+    pub fn as_interval(self) -> std::time::Duration {
+        std::time::Duration::from_nanos(1_000_000_000 / self.as_u32() as u64)
+    }
+}
+
+/// Vertical-sync / adaptive-sync mode.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum VsyncMode {
+    /// No V-Sync (immediate present).
+    Off,
+    /// V-Sync — wait for the next VBLANK (Fifo).
+    On,
+}
+
+impl VsyncMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            VsyncMode::Off => "Off",
+            VsyncMode::On => "V-Sync",
+        }
+    }
+
+    pub fn to_wgpu(self) -> wgpu::PresentMode {
+        match self {
+            VsyncMode::Off => wgpu::PresentMode::Immediate,
+            VsyncMode::On => wgpu::PresentMode::Fifo,
+        }
+    }
+}
+
+/// All video-related settings that can be changed from the pause menu.
+#[derive(Clone, Copy)]
+pub struct VideoSettings {
+    /// Whether the software frame-rate cap is active.
+    pub fps_limit_enabled: bool,
+    /// The active discrete frame-rate cap (only used when `fps_limit_enabled`).
+    pub fps_limit: FpsLimit,
+    /// V-Sync / adaptive-sync mode.
+    pub vsync: VsyncMode,
+}
+
+impl Default for VideoSettings {
+    fn default() -> Self {
+        Self {
+            fps_limit_enabled: false,
+            fps_limit: FpsLimit::Fps240,
+            vsync: VsyncMode::On,
+        }
+    }
+}
+
 pub struct GameApp {
     pub window: Arc<Window>,
     renderer: RendererHandle,
@@ -61,6 +154,13 @@ pub struct GameApp {
     /// Mouse capture active.
     cursor_grabbed: bool,
 
+    /// Buffers raw mouse deltas between frames; decouples 1000 Hz mice from
+    /// the logic tick rate without dropping any motion data.
+    input_buffer: InputBuffer,
+    /// EMA smoother applied to the per-frame accumulated mouse delta to
+    /// reduce jitter from polling variance and sub-pixel rounding.
+    mouse_smoother: MouseSmoother,
+
     last_tick: Instant,
     world_time: f32,
 
@@ -70,10 +170,9 @@ pub struct GameApp {
     /// World coords of the currently targeted block.
     targeted_block: Option<[i32; 3]>,
 
-    /// FPS tracking.
+    /// FPS tracking (exponential moving average of frame durations).
     fps: u32,
-    frame_count: u32,
-    fps_timer: Instant,
+    fps_ema_dt: f32, // seconds, EMA of per-frame dt
 
     /// Active game mode.
     game_mode: GameMode,
@@ -89,6 +188,8 @@ pub struct GameApp {
     pause_panel: PausePanel,
     /// Brightness multiplier (0.0 – 2.0, default 1.0).
     brightness: f32,
+    /// Video settings (fps cap, vsync).
+    pub video_settings: VideoSettings,
 }
 
 impl GameApp {
@@ -133,6 +234,11 @@ impl GameApp {
             None,
             Some(max_texture_side),
         );
+        // egui_winit installs a repaint callback that calls window.request_redraw()
+        // on every hover/cursor event, bypassing our frame-cap pacing and causing
+        // flickering. Our game loop owns all redraw scheduling via about_to_wait,
+        // so replace the callback with a no-op.
+        egui_ctx.set_request_repaint_callback(|_| {});
 
         Self {
             window,
@@ -144,19 +250,24 @@ impl GameApp {
             physics,
             keys: HashSet::new(),
             cursor_grabbed: false,
+            input_buffer: InputBuffer::new(),
+            // alpha = 0.65 — responsive but removes per-frame jitter.
+            // Raise toward 1.0 for raw feel; lower toward 0.3 for buttery
+            // smoothness at the cost of ~1-2 extra frames of perceived lag.
+            mouse_smoother: MouseSmoother::new(0.65),
             last_tick: Instant::now(),
             world_time: 0.25,
             selected_block: BlockType::Dirt,
             targeted_block: None,
             fps: 0,
-            frame_count: 0,
-            fps_timer: Instant::now(),
+            fps_ema_dt: 1.0 / 60.0,
             game_mode: GameMode::Creative,
             flying: false,
             last_space_time: None,
             paused: false,
             pause_panel: PausePanel::Main,
             brightness: 1.0,
+            video_settings: VideoSettings::default(),
         }
     }
 
@@ -232,8 +343,43 @@ impl GameApp {
 
     pub fn mouse_moved(&mut self, dx: f64, dy: f64) {
         if self.cursor_grabbed {
-            self.camera.rotate(dx as f32, dy as f32);
+            // Accumulate the raw delta into the input buffer.  The logic tick
+            // in update_and_render consumes the total accumulated delta once
+            // per frame, applies EMA smoothing, and rotates the camera.
+            // This correctly batches 1000 Hz mouse events into a single
+            // per-frame rotation without losing any motion.
+            self.input_buffer.push_mouse_delta(dx as f32, dy as f32);
         }
+    }
+
+    /// Build a FrameState from current camera/world state and send it to
+    /// the render thread.  Called both from `update_and_render` and from
+    /// `mouse_moved` so the render thread always has the freshest view
+    /// matrix, decoupling camera latency from the frame-rate cap.
+    fn push_frame_state(&self) {
+        let size = self.window.inner_size();
+        let aspect = size.width as f32 / size.height as f32;
+        let view = self.camera.view_matrix().to_cols_array();
+        let proj = self.camera.projection_matrix(aspect).to_cols_array();
+        let sun_angle = self.world_time * 2.0 * std::f32::consts::PI;
+        let sun_dir = [
+            sun_angle.cos(),
+            sun_angle.sin().abs() + 0.2,
+            sun_angle.sin() * 0.3,
+        ];
+        let _ = self
+            .renderer
+            .tx
+            .send(RenderCommand::UpdateFrame(FrameState {
+                camera: CameraState {
+                    position: self.camera.position.to_array(),
+                    view_matrix: view,
+                    projection_matrix: proj,
+                },
+                sun_direction: sun_dir,
+                time: self.world_time,
+                targeted_block: self.targeted_block,
+            }));
     }
 
     pub fn mouse_left_pressed(&mut self) {
@@ -279,11 +425,34 @@ impl GameApp {
             .send(RenderCommand::Resize { width, height });
     }
 
+    /// Returns a reference to the winit window.
+    pub fn window(&self) -> &Window {
+        &self.window
+    }
+
     /// Called each frame from the winit event loop.
     pub fn update_and_render(&mut self) {
         let now = Instant::now();
         let dt = now.duration_since(self.last_tick).as_secs_f32();
         self.last_tick = now;
+
+        // ── Input consumption ───────────────────────────────────────────────
+        // Drain all raw mouse deltas accumulated since the last tick and apply
+        // EMA smoothing.  This decouples 1000 Hz mice from the logic rate:
+        // many push_mouse_delta calls collapse into one smoothed rotation.
+        let actions = ActionState::from_keys(&self.keys);
+        {
+            let (raw_dx, raw_dy) = self.input_buffer.consume();
+            if self.cursor_grabbed && !self.paused {
+                let (sdx, sdy) = self.mouse_smoother.smooth(raw_dx, raw_dy);
+                self.camera.rotate(sdx, sdy);
+            } else {
+                // Drain smoother decay so stale motion doesn't bleed into
+                // the next active frame (e.g. after unpausing).
+                self.mouse_smoother.smooth(0.0, 0.0);
+            }
+        }
+        // ───────────────────────────────────────────────────────────────────
 
         // Advance world time (0-1, day cycle).
         self.world_time = (self.world_time + dt / 120.0) % 1.0;
@@ -293,11 +462,9 @@ impl GameApp {
                 // ── Flying physics ─────────────────
                 const FLY_SPEED: f32 = 10.0;
                 let (wish_x, wish_z) = self.compute_wish_vel();
-                let wish_y = if self.keys.contains(&KeyCode::Space) {
+                let wish_y = if actions.jump_or_ascend {
                     1.0_f32
-                } else if self.keys.contains(&KeyCode::ShiftLeft)
-                    || self.keys.contains(&KeyCode::ShiftRight)
-                {
+                } else if actions.fly_descend {
                     -1.0_f32
                 } else {
                     0.0_f32
@@ -326,57 +493,31 @@ impl GameApp {
             self.targeted_block = None;
         }
 
-        // FPS + window title (update once per second).
-        self.frame_count += 1;
-        let fps_elapsed = now.duration_since(self.fps_timer).as_secs_f32();
-        if fps_elapsed >= 1.0 {
-            self.fps = self.frame_count;
-            self.frame_count = 0;
-            self.fps_timer = now;
-            let p = self.camera.position;
-            let block_name = self
-                .targeted_block
-                .map(|[bx, by, bz]| format!("{:?}", self.world.get_block(bx, by, bz)))
-                .unwrap_or_else(|| "—".to_string());
-            let _ = self.window.set_title(&format!(
-                "Voidborne  \
-                 FPS:{fps}  \
-                 XYZ:{x:.1},{y:.1},{z:.1}  \
-                 Looking:{block}",
-                fps = self.fps,
-                x = p.x,
-                y = p.y,
-                z = p.z,
-                block = block_name,
-            ));
-        }
+        // FPS: exponential moving average — α=0.1 gives smooth ~10-frame
+        // response without the 1-second stale jump of a simple counter.
+        const EMA_ALPHA: f32 = 0.1;
+        self.fps_ema_dt = EMA_ALPHA * dt + (1.0 - EMA_ALPHA) * self.fps_ema_dt;
+        self.fps = (1.0 / self.fps_ema_dt).round() as u32;
+        let p = self.camera.position;
+        let block_name = self
+            .targeted_block
+            .map(|[bx, by, bz]| format!("{:?}", self.world.get_block(bx, by, bz)))
+            .unwrap_or_else(|| "—".to_string());
+        let _ = self.window.set_title(&format!(
+            "Voidborne  \
+             FPS:{fps}  \
+             XYZ:{x:.1},{y:.1},{z:.1}  \
+             Looking:{block}",
+            fps = self.fps,
+            x = p.x,
+            y = p.y,
+            z = p.z,
+            block = block_name,
+        ));
 
-        // Build frame state.
-        let size = self.window.inner_size();
-        let aspect = size.width as f32 / size.height as f32;
-        let view = self.camera.view_matrix().to_cols_array();
-        let proj = self.camera.projection_matrix(aspect).to_cols_array();
-
-        let sun_angle = self.world_time * 2.0 * std::f32::consts::PI;
-        let sun_dir = [
-            sun_angle.cos(),
-            sun_angle.sin().abs() + 0.2,
-            sun_angle.sin() * 0.3,
-        ];
-
-        let _ = self
-            .renderer
-            .tx
-            .send(RenderCommand::UpdateFrame(FrameState {
-                camera: CameraState {
-                    position: self.camera.position.to_array(),
-                    view_matrix: view,
-                    projection_matrix: proj,
-                },
-                sun_direction: sun_dir,
-                time: self.world_time,
-                targeted_block: self.targeted_block,
-            }));
+        // Push the latest camera + world state to the render thread.
+        // (Also called from mouse_moved for sub-frame-interval camera updates.)
+        self.push_frame_state();
 
         // ── egui frame ─────────────────────────────
         let raw = self.egui_winit.take_egui_input(&self.window);
@@ -393,6 +534,7 @@ impl GameApp {
         // Mutable locals for UI-driven state changes.
         let mut next_panel = self.pause_panel;
         let mut brightness = self.brightness;
+        let mut video = self.video_settings;
         let mut action = MenuAction::None;
 
         let full_output = self.egui_ctx.run(raw, |ctx| {
@@ -407,12 +549,23 @@ impl GameApp {
                 flying,
                 &mut next_panel,
                 &mut brightness,
+                &mut video,
             );
         });
 
         // Apply UI state changes.
         self.pause_panel = next_panel;
         self.brightness = brightness;
+        if video.fps_limit_enabled != self.video_settings.fps_limit_enabled
+            || video.fps_limit != self.video_settings.fps_limit
+            || video.vsync != self.video_settings.vsync
+        {
+            self.video_settings = video;
+            let _ = self
+                .renderer
+                .tx
+                .send(RenderCommand::SetVideoSettings(video));
+        }
         match action {
             MenuAction::Resume => {
                 self.paused = false;
@@ -437,8 +590,6 @@ impl GameApp {
             textures_delta: full_output.textures_delta,
             screen_descriptor,
         }));
-
-        self.window.request_redraw();
     }
 
     fn compute_wish_vel(&self) -> (f32, f32) {
@@ -537,6 +688,14 @@ impl GameApp {
 
 // ── Pause menu UI (standalone to avoid self borrows) ──
 
+/// Renders a label on the left and a right-aligned controls closure.
+fn setting_row(ui: &mut egui::Ui, label: &str, controls: impl FnOnce(&mut egui::Ui)) {
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(label).color(egui::Color32::from_gray(210)));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), controls);
+    });
+}
+
 fn pause_ui(
     ctx: &egui::Context,
     paused: bool,
@@ -547,6 +706,7 @@ fn pause_ui(
     flying: bool,
     panel: &mut PausePanel,
     brightness: &mut f32,
+    video: &mut VideoSettings,
 ) -> MenuAction {
     // Always show debug overlay (top-left).
     egui::Area::new(egui::Id::new("debug_hud"))
@@ -666,7 +826,7 @@ fn pause_ui(
                         });
                         ui.add_space(16.0);
 
-                        // Brightness slider (0 – 200 %).
+                        // ── Brightness ────────────────────────────
                         let mut pct = (*brightness * 100.0).round() as i32;
                         ui.horizontal(|ui| {
                             ui.label(
@@ -692,9 +852,48 @@ fn pause_ui(
                             *brightness = pct_f / 100.0;
                         }
 
-                        ui.add_space(20.0);
+                        ui.add_space(12.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+
+                        // ── V-Sync ────────────────────────────────
+                        setting_row(ui, "V-Sync", |ui| {
+                            let is_on = video.vsync == VsyncMode::On;
+                            let label = if is_on { "On" } else { "Off" };
+                            if ui.selectable_label(is_on, label).clicked() {
+                                video.vsync = if is_on { VsyncMode::Off } else { VsyncMode::On };
+                            }
+                        });
+
+                        ui.add_space(8.0);
+
+                        // ── Frame-rate limit toggle ───────────────
+                        setting_row(ui, "Frame limit", |ui| {
+                            let label = if video.fps_limit_enabled { "On" } else { "Off" };
+                            if ui
+                                .selectable_label(video.fps_limit_enabled, label)
+                                .clicked()
+                            {
+                                video.fps_limit_enabled = !video.fps_limit_enabled;
+                            }
+                        });
+
+                        // ── Max FPS selector (shown when limit is on) ─
+                        if video.fps_limit_enabled {
+                            setting_row(ui, "Max FPS", |ui| {
+                                for &opt in FpsLimit::ALL {
+                                    let selected = video.fps_limit == opt;
+                                    if ui.selectable_label(selected, opt.label()).clicked() {
+                                        video.fps_limit = opt;
+                                    }
+                                    ui.add_space(4.0);
+                                }
+                            });
+                        }
+
+                        ui.add_space(16.0);
                         if ui
-                            .add_sized([252.0, 32.0], egui::Button::new("Done"))
+                            .add_sized([300.0, 32.0], egui::Button::new("Done"))
                             .clicked()
                         {
                             *panel = PausePanel::Main;

@@ -3043,6 +3043,7 @@ dependencies = [
  "egui-winit",
  "env_logger",
  "glam",
+ "image",
  "log",
  "pollster",
  "serde",
@@ -3084,6 +3085,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "glam",
+ "image",
  "pollster",
  "smallvec",
  "thiserror 2.0.18",
